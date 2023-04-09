@@ -29,6 +29,7 @@ type CrudConfig[T any, CtxType any] struct {
 	ParentGroup *gin.RouterGroup
 	Model       T
 	App         *AppContext[CtxType]
+	CrudGroup   *CrudGroup[CtxType]
 
 	existing     []gin.HandlerFunc
 	beforeCreate []gin.HandlerFunc
@@ -241,12 +242,14 @@ func (result *CrudConfig[T, CtxType]) NoAuth() *CrudConfig[T, CtxType] {
 	return result
 }
 
-func New[T any, CtxType any](appctx *AppContext[CtxType], group *gin.RouterGroup, model T) *CrudConfig[T, CtxType] {
+func New[T any, CtxType any](crudGroup *CrudGroup[CtxType], group *gin.RouterGroup, model T) *CrudConfig[T, CtxType] {
 
 	result := CrudConfig[T, CtxType]{
 		ParentGroup: group,
 		Model:       model,
-		App:         appctx,
+		App:         &crudGroup.Ctx,
+		CrudGroup:   crudGroup,
+		skipAuth:    !crudGroup.Config.Auth,
 	}
 
 	// todo check rights in all methods
