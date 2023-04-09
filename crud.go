@@ -44,6 +44,7 @@ type CrudConfig[T any, CtxType any] struct {
 	hasMultiple []ApiObjectRelation[T, CtxType]
 
 	passObject bool
+	skipAuth   bool
 }
 
 func (it CrudConfig[T, CtxType]) RelTable() string {
@@ -235,6 +236,11 @@ func CheckRights[T any, CtxType any](
 	}
 }
 
+func (result *CrudConfig[T, CtxType]) NoAuth() *CrudConfig[T, CtxType] {
+	result.skipAuth = true
+	return result
+}
+
 func New[T any, CtxType any](appctx *AppContext[CtxType], group *gin.RouterGroup, model T) *CrudConfig[T, CtxType] {
 
 	result := CrudConfig[T, CtxType]{
@@ -372,45 +378,59 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	// todo impl paging
 	group.GET("", func(ctx *gin.Context) {
 
-		// if result.relTypeTable == "" {
-		// 	ctx.AbortWithStatusJSON(404, gin.H{
-		// 		"msg": "no such endpoint",
-		// 	})
-		// 	return
-		// }
-
-		userRelatedObjects := []UserToObject{}
-
-		relatedErr := appctx.Db.
-			Where("user_id = ?", GetUserId(ctx)).
-			Table(result.relTypeTable).
-			Find(&userRelatedObjects).
-			Error
-
-		if relatedErr != nil {
-			ctx.AbortWithStatusJSON(500, gin.H{
-				"msg": "unable to get related objects",
-				"err": relatedErr.Error(),
-			})
-			return
-		}
-
 		items := []T{}
 
-		if len(userRelatedObjects) > 0 {
+		// should be auth check instead
+		if result.skipAuth {
 
-			ids := []uint64{}
+			// todo add paging
+			fetchErr := appctx.Db.Find(items).Error
 
-			for _, it := range userRelatedObjects {
-				ids = append(ids, it.ObjectId)
+			ctx.AbortWithStatusJSON(404, gin.H{
+				"msg": "db err",
+				"err": fetchErr.Error(),
+			})
+			return
+		} else {
+
+			if result.relTypeTable == "" {
+				ctx.AbortWithStatusJSON(404, gin.H{
+					"msg": "no such endpoint",
+				})
+				return
 			}
 
-			foundErr := appctx.Db.Where("id IN ?", ids).Find(&items).Error
-			if foundErr != nil {
-				ctx.JSON(500, gin.H{
-					"msg": "unable to find items",
-					"err": foundErr.Error(),
+			userRelatedObjects := []UserToObject{}
+
+			relatedErr := appctx.Db.
+				Where("user_id = ?", GetUserId(ctx)).
+				Table(result.relTypeTable).
+				Find(&userRelatedObjects).
+				Error
+
+			if relatedErr != nil {
+				ctx.AbortWithStatusJSON(500, gin.H{
+					"msg": "unable to get related objects",
+					"err": relatedErr.Error(),
 				})
+				return
+			}
+
+			if len(userRelatedObjects) > 0 {
+
+				ids := []uint64{}
+
+				for _, it := range userRelatedObjects {
+					ids = append(ids, it.ObjectId)
+				}
+
+				foundErr := appctx.Db.Where("id IN ?", ids).Find(&items).Error
+				if foundErr != nil {
+					ctx.JSON(500, gin.H{
+						"msg": "unable to find items",
+						"err": foundErr.Error(),
+					})
+				}
 			}
 		}
 
