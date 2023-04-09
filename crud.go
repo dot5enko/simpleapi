@@ -386,11 +386,13 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			// todo add paging
 			fetchErr := appctx.Db.Find(&items).Error
 
-			ctx.AbortWithStatusJSON(404, gin.H{
-				"msg": "db err",
-				"err": fetchErr.Error(),
-			})
-			return
+			if fetchErr != nil {
+				ctx.AbortWithStatusJSON(404, gin.H{
+					"msg": "db err",
+					"err": fetchErr,
+				})
+				return
+			}
 		} else {
 
 			if result.relTypeTable == "" {
