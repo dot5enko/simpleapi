@@ -1,4 +1,4 @@
-package main
+package simpleapi
 
 type Relation[T any] interface {
 	RelatedObjectFieldName() string

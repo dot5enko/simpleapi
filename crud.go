@@ -1,4 +1,4 @@
-package main
+package simpleapi
 
 import (
 	"encoding/json"
@@ -372,12 +372,12 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	// todo impl paging
 	group.GET("", func(ctx *gin.Context) {
 
-		if result.relTypeTable == "" {
-			ctx.AbortWithStatusJSON(404, gin.H{
-				"msg": "no such endpoint",
-			})
-			return
-		}
+		// if result.relTypeTable == "" {
+		// 	ctx.AbortWithStatusJSON(404, gin.H{
+		// 		"msg": "no such endpoint",
+		// 	})
+		// 	return
+		// }
 
 		userRelatedObjects := []UserToObject{}
 

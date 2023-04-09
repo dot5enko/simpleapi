@@ -1,4 +1,4 @@
-package main
+package simpleapi
 
 import (
 	"github.com/tidwall/gjson"
