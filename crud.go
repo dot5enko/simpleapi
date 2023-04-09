@@ -384,7 +384,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		if result.skipAuth {
 
 			// todo add paging
-			fetchErr := appctx.Db.Find(items).Error
+			fetchErr := appctx.Db.Find(&items).Error
 
 			ctx.AbortWithStatusJSON(404, gin.H{
 				"msg": "db err",
