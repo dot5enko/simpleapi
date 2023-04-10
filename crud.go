@@ -113,6 +113,8 @@ func (it *CrudConfig[T, CtxType]) UseBeforeCreate(h ...gin.HandlerFunc) *CrudCon
 func storeObjectInContext[T any, CtxType any](appctx *AppContext[CtxType], ctx *gin.Context) Result[T] {
 	orgId := GetArgUint(ctx, "id")
 
+	FindFirstWhere("id = ?", orgId)
+
 	var obj T
 	err := appctx.Db.Where("id = ?", orgId).First(&obj).Error
 

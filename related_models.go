@@ -16,8 +16,10 @@ func RelatedItemHandlerImpl[OfType any, CtxType any, RelatedType any](appctx *Ap
 	model := *new(OfType)
 	modelCopy := model
 
+	_db := appctx.Db.Raw()
+
 	// todo validate
-	errFirst := appctx.Db.Model(&model).Where("id = ?", idParam).First(&modelCopy).Error
+	errFirst := _db.Model(&model).Where("id = ?", idParam).First(&modelCopy).Error
 
 	if errFirst != nil {
 		ctx.JSON(404, gin.H{
@@ -56,12 +58,10 @@ func RelatedItemHandlerImpl[OfType any, CtxType any, RelatedType any](appctx *Ap
 
 			whereCond := fmt.Sprintf("%s = ?", parentIdField)
 
-			tx := appctx.Db
-
 			// todo cache
 			relatedModel := *new(RelatedType)
 
-			result := tx.Model(relatedModel).Where(whereCond, relatedObjectId).Find(&outItems)
+			result := _db.Model(relatedModel).Where(whereCond, relatedObjectId).Find(&outItems)
 
 			err := result.Error
 

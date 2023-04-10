@@ -6,7 +6,19 @@ import (
 )
 
 type AppContext[T any] struct {
-	Db      *gorm.DB
 	Data    *T
 	Request *gin.Context
+
+	Db DbWrapper[T]
+
+	isolated bool
+}
+
+func (c AppContext[T]) isolateDatabase(isolatedDb *gorm.DB) AppContext[T] {
+
+	result := c
+
+	result.Db.setRaw(isolatedDb)
+
+	return result
 }
