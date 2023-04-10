@@ -107,11 +107,26 @@ func (d DbWrapper[CtxType]) Create(obj any) (err error) {
 	})
 }
 
-func FindAllWhere[T any, CtxType any](db DbWrapper[CtxType], where string) Result[[]T] {
+func (d DbWrapper[CtxType]) Delete(obj any) (err error) {
+
+	err = d.Raw().Delete(obj).Error
+
+	return
+
+	// if d.app.isolated {
+	// 	return _isolatedCreate(obj, *d.app)
+	// }
+
+	// return d.db.Transaction(func(tx *gorm.DB) error {
+	// 	return _isolatedCreate(obj, d.app.isolateDatabase(tx))
+	// })
+}
+
+func FindAllWhere[T any, CtxType any](db DbWrapper[CtxType], where string, whereArgs ...any) Result[[]T] {
 
 	result := []T{}
 
-	findErr := db.Raw().Where(where).Find(&result).Error
+	findErr := db.Raw().Where(where, whereArgs...).Find(&result).Error
 
 	if findErr != nil {
 		return ResultFailed[[]T](findErr)
@@ -121,11 +136,11 @@ func FindAllWhere[T any, CtxType any](db DbWrapper[CtxType], where string) Resul
 
 }
 
-func FindFirstWhere[T any, CtxType any](db DbWrapper[CtxType], where string) Result[T] {
+func FindFirstWhere[T any, CtxType any](db DbWrapper[CtxType], where string, whereArgs ...any) Result[T] {
 
 	var result T
 
-	findErr := db.Raw().Where(where).First(&result).Error
+	findErr := db.Raw().Where(where, whereArgs...).First(&result).Error
 
 	if findErr != nil {
 		return ResultFailed[T](findErr)

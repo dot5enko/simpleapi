@@ -28,7 +28,9 @@ func GetTokenOrCreate[CtxType any](appctx *AppContext[CtxType], user User, expir
 	tNow := time.Now()
 	var obj AccessToken
 
-	findErr := appctx.Db.Where("user_id = ? && expired_at > ?", user.Id, tNow).First(&obj).Error
+	findResult := FindFirstWhere[AccessToken](appctx.Db, "user_id = ? && expired_at > ?", user.Id, tNow)
+
+	findErr := findResult.UnwrapError()
 
 	if findErr != nil {
 		// create new
@@ -38,7 +40,7 @@ func GetTokenOrCreate[CtxType any](appctx *AppContext[CtxType], user User, expir
 		obj.UserId = user.Id
 		obj.Value = fmt.Sprintf("%d:%s:%d", tNow.Unix(), uuid.NewString(), user.Id)
 
-		createError := appctx.Db.Create(&obj).Error
+		createError := appctx.Db.Create(&obj)
 		if createError != nil {
 			return ResultFailed[AccessToken](createError)
 		} else {
@@ -46,7 +48,7 @@ func GetTokenOrCreate[CtxType any](appctx *AppContext[CtxType], user User, expir
 		}
 
 	} else {
-		return ResultOk(obj)
+		return findResult
 	}
 }
 
@@ -54,28 +56,33 @@ func UserByToken[T any](appCtx *AppContext[T], tok string) (result Result[User])
 
 	var err error
 	var resultToken AccessToken
-	err = appCtx.Db.
-		Find(&AccessToken{}).
-		Where("value = ?", tok).
-		First(&resultToken).
-		Error
+
+	findResult := FindFirstWhere[AccessToken](appCtx.Db, "value = ?", tok)
+
+	err = findResult.UnwrapError()
 
 	if err != nil {
 		result.SetFail(ErrTokenNotExist)
 		return
 	}
 
+	resultToken = findResult.Unwrap()
+
 	if !resultToken.ExpiredAt.After(time.Now()) {
 		result.SetFail(ErrTokenExpired)
 		return
 	}
 	var resp User
-	err = appCtx.Db.Where("id = ?", resultToken.UserId).First(&resp).Error
+
+	userFindResult := FindFirstWhere[User](appCtx.Db, "id = ?", resultToken.UserId)
+	err = userFindResult.UnwrapError()
 
 	if err != nil {
 		result.SetFail(ErrUserNotExists)
 		return
 	}
+
+	resp = userFindResult.Unwrap()
 
 	result.SetOk(resp)
 	return

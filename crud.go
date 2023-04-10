@@ -113,18 +113,13 @@ func (it *CrudConfig[T, CtxType]) UseBeforeCreate(h ...gin.HandlerFunc) *CrudCon
 func storeObjectInContext[T any, CtxType any](appctx *AppContext[CtxType], ctx *gin.Context) Result[T] {
 	orgId := GetArgUint(ctx, "id")
 
-	FindFirstWhere("id = ?", orgId)
+	result := FindFirstWhere[T](appctx.Db, "id = ?", orgId)
 
-	var obj T
-	err := appctx.Db.Where("id = ?", orgId).First(&obj).Error
-
-	if err != nil {
-		return ResultFailed[T](err)
-	} else {
-		ctx.Set("_object", obj)
-
-		return ResultOk(obj)
+	if result.IsOk() {
+		ctx.Set("_object", result.Unwrap())
 	}
+
+	return result
 }
 
 func createRelAfterSave[T any, CtxType any](appctx *AppContext[CtxType], obj *T, relTable string) error {
@@ -137,7 +132,7 @@ func createRelAfterSave[T any, CtxType any](appctx *AppContext[CtxType], obj *T,
 	relation.ObjectId = val.FieldByName("Id").Uint()
 	relation.UserId = GetUserId(appctx.Request)
 
-	return appctx.Db.Table(relTable).Create(&relation).Error
+	return appctx.Db.Raw().Table(relTable).Create(&relation).Error
 }
 
 // returns -1 if no role attached
@@ -152,7 +147,7 @@ func UserRelationRole[T any](
 
 	var relationInfo UserToObject
 
-	err := appctx.Db.Table(reltable.TableName()).
+	err := appctx.Db.Raw().Table(reltable.TableName()).
 		Where("object_id = ? and user_id = ? ", objectId, userId).
 		First(&relationInfo).
 		Error
@@ -179,7 +174,7 @@ func checkRole[T any, CtxT any](appctx *AppContext[CtxT], ctx *gin.Context, rela
 
 	var relationInfo UserToObject
 
-	err := appctx.Db.Table(relatedTable).
+	err := appctx.Db.Raw().Table(relatedTable).
 		Where("object_id = ? and user_id = ? ", objectId, userId).
 		First(&relationInfo).Error
 
@@ -302,13 +297,10 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			modelFillable.FromDto(parsedJson)
 		}
 
-		createdErr := appctx.Db.Transaction(func(tx *gorm.DB) error {
+		createdErr := appctx.Db.Raw().Transaction(func(tx *gorm.DB) error {
 
-			isolatedContext := &AppContext[CtxType]{
-				Db:      tx,
-				Data:    result.App.Data,
-				Request: ctx,
-			}
+			isolatedContext := appctx.isolateDatabase(tx)
+			isolatedContext.Request = ctx
 
 			if true {
 				// todo optimize check
@@ -332,7 +324,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			if result.objectCreate != nil {
 
 				crudCtx := CrudContext[T, CtxType]{
-					App:  isolatedContext,
+					App:  &isolatedContext,
 					Crud: result,
 				}
 
@@ -349,14 +341,14 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			}
 
 			if result.relTypeTable != "" {
-				afterCreateErr := createRelAfterSave(isolatedContext, &modelCopy, result.relTypeTable)
+				afterCreateErr := createRelAfterSave(&isolatedContext, &modelCopy, result.relTypeTable)
 				if afterCreateErr != nil {
 					return fmt.Errorf("unable to create related reference: %s", afterCreateErr.Error())
 				}
 			}
 
 			if result.afterCreate != nil {
-				afterCreateErr := result.afterCreate(isolatedContext, &modelCopy)
+				afterCreateErr := result.afterCreate(&isolatedContext, &modelCopy)
 				if afterCreateErr != nil {
 					return fmt.Errorf("unable to perform pre object create hook: %s", afterCreateErr.Error())
 				}
@@ -383,21 +375,29 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	// todo impl paging
 	group.GET("", func(ctx *gin.Context) {
 
-		items := []T{}
+		var items []T
 
 		// should be auth check instead
 		if result.skipAuth {
 
 			// todo add paging
-			fetchErr := appctx.Db.Find(&items).Error
+			itemsResult := FindAllWhere[T](appctx.Db, "")
 
-			if fetchErr != nil {
-				ctx.AbortWithStatusJSON(404, gin.H{
-					"msg": "db err",
-					"err": fetchErr,
-				})
-				return
+			if !itemsResult.IsOk() {
+
+				fetchErr := itemsResult.UnwrapError()
+
+				if fetchErr != nil {
+					ctx.AbortWithStatusJSON(404, gin.H{
+						"msg": "db err",
+						"err": fetchErr.Error(),
+					})
+					return
+				}
+			} else {
+				items = itemsResult.Unwrap()
 			}
+
 		} else {
 
 			if result.relTypeTable == "" {
@@ -409,7 +409,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 			userRelatedObjects := []UserToObject{}
 
-			relatedErr := appctx.Db.
+			relatedErr := appctx.Db.Raw().
 				Where("user_id = ?", GetUserId(ctx)).
 				Table(result.relTypeTable).
 				Find(&userRelatedObjects).
@@ -431,13 +431,20 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 					ids = append(ids, it.ObjectId)
 				}
 
-				foundErr := appctx.Db.Where("id IN ?", ids).Find(&items).Error
-				if foundErr != nil {
-					ctx.JSON(500, gin.H{
-						"msg": "unable to find items",
-						"err": foundErr.Error(),
-					})
+				foundResult := FindAllWhere[T](appctx.Db, "id IN ?", ids)
+
+				if !foundResult.IsOk() {
+
+					foundErr := foundResult.UnwrapError()
+
+					if foundErr != nil {
+						ctx.JSON(500, gin.H{
+							"msg": "unable to find items",
+							"err": foundErr.Error(),
+						})
+					}
 				}
+
 			}
 		}
 
@@ -522,17 +529,22 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 	existingItems.PATCH("", func(ctx *gin.Context) {
 
-		modelCopy := model
+		var modelCopy T
 
 		idParam := ctx.Param("id")
-		findErr := appctx.Db.Model(model).First(&modelCopy, "id = ?", idParam).Error
+		findResult := FindFirstWhere[T](appctx.Db, "id = ?", idParam)
 
-		if findErr != nil {
+		if findResult.IsOk() {
+
+			findErr := findResult.UnwrapError()
+
 			ctx.JSON(404, gin.H{
 				"msg": "object not found",
 				"err": findErr.Error(),
 			})
 		} else {
+
+			modelCopy = findResult.Unwrap()
 
 			// parse input data
 			copy2 := map[string]interface{}{}
@@ -558,7 +570,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			panic("update is not implemented")
 			// database.Fill(&modelCopy, copy2)
 
-			saveError := appctx.Db.Save(&modelCopy).Error
+			saveError := appctx.Db.Save(&modelCopy)
 			if saveError != nil {
 				ctx.JSON(404, gin.H{
 					"msg": "unable to update object",
@@ -576,15 +588,22 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	existingItems.DELETE("", func(ctx *gin.Context) {
 
 		idParam := ctx.Param("id")
-		findErr := appctx.Db.Model(model).First(&model, "id = ?", idParam).Error
 
-		if findErr != nil {
+		findResult := FindFirstWhere[T](appctx.Db, "id = ?", idParam)
+
+		if !findResult.IsOk() {
+
+			findErr := findResult.UnwrapError()
+
 			ctx.JSON(404, gin.H{
 				"msg": "object not found",
 				"err": findErr.Error(),
 			})
 		} else {
-			deleteError := appctx.Db.Delete(&model).Error
+
+			model = findResult.Unwrap()
+
+			deleteError := appctx.Db.Delete(&model)
 			if deleteError != nil {
 				ctx.JSON(500, gin.H{
 					"msg": "unable to remove",
@@ -606,8 +625,10 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		modelCopy := model
 
+		findResult := FindFirstWhere[T](appctx.Db, "id = ?", idParam)
+
 		// todo validate
-		errFirst := appctx.Db.Model(&model).Where("id = ?", idParam).First(&modelCopy).Error
+		errFirst := findResult.UnwrapError()
 
 		if errFirst != nil {
 			ctx.JSON(404, gin.H{
@@ -615,6 +636,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				"err": errFirst.Error(),
 			})
 		} else {
+
+			modelCopy = findResult.Unwrap()
 
 			// todo get role
 
