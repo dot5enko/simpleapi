@@ -23,6 +23,13 @@ type DbWrapper[CtxType any] struct {
 	app *AppContext[CtxType]
 }
 
+func WrapGormDb[T any](d *gorm.DB, ctx *AppContext[T]) DbWrapper[T] {
+	return DbWrapper[T]{
+		db:  d,
+		app: ctx,
+	}
+}
+
 func (d DbWrapper[CtxType]) Raw() *gorm.DB {
 	return d.db
 }

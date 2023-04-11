@@ -1,7 +1,6 @@
 package simpleapi
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"reflect"
@@ -280,21 +279,33 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			return
 		}
 
-		modelFillable, ok := any(&modelCopy).(ApiDtoFillable)
+		modelFillable, ok := any(&modelCopy).(ApiDtoFillable[CtxType])
 
 		if !ok {
-			unmarshalErr := json.Unmarshal(data, &modelCopy)
 
-			if unmarshalErr != nil {
+			ctx.JSON(500, gin.H{
+				"msg": "unable to decode object info. object is not fillable",
+				// "err": unmarshalErr.Error(),
+			})
+			return
+
+			// unmarshalErr := json.Unmarshal(data, &modelCopy)
+
+			// if unmarshalErr != nil {
+
+			// }
+		} else {
+			parsedJson := gjson.ParseBytes(data)
+
+			// todo move in transaction
+			fillError := modelFillable.FromDto(parsedJson, appctx)
+			if fillError != nil {
 				ctx.JSON(500, gin.H{
-					"msg": "unable to decode obhect info",
-					"err": unmarshalErr.Error(),
+					"msg": "can't fill object with provided data",
+					"err": fillError,
 				})
 				return
 			}
-		} else {
-			parsedJson := gjson.ParseBytes(data)
-			modelFillable.FromDto(parsedJson)
 		}
 
 		createdErr := appctx.Db.Raw().Transaction(func(tx *gorm.DB) error {
@@ -534,20 +545,17 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		idParam := ctx.Param("id")
 		findResult := FindFirstWhere[T](appctx.Db, "id = ?", idParam)
 
-		if findResult.IsOk() {
+		if !findResult.IsOk() {
 
 			findErr := findResult.UnwrapError()
 
 			ctx.JSON(404, gin.H{
 				"msg": "object not found",
-				"err": findErr.Error(),
+				"err": findErr,
 			})
 		} else {
 
 			modelCopy = findResult.Unwrap()
-
-			// parse input data
-			copy2 := map[string]interface{}{}
 
 			data, err := ctx.GetRawData()
 			if err != nil {
@@ -557,18 +565,36 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				})
 				return
 			}
-			unmarshalErr := json.Unmarshal(data, &copy2)
+			parsed := gjson.ParseBytes(data)
 
-			if unmarshalErr != nil {
+			if !parsed.Exists() {
 				ctx.JSON(500, gin.H{
 					"msg": "unable to decode obhect info",
-					"err": unmarshalErr.Error(),
+					"raw": string(data),
 				})
 				return
 			}
 
 			panic("update is not implemented")
-			// database.Fill(&modelCopy, copy2)
+
+			fillable, ok := any(modelCopy).(ApiDtoFillable[CtxType])
+			if !ok {
+				ctx.JSON(500, gin.H{
+					"msg":  "object is not fillable",
+					"type": fmt.Sprintf("%#+v", modelCopy),
+				})
+				return
+			}
+
+			fillError := fillable.FromDto(parsed, appctx)
+
+			if fillError != nil {
+				ctx.JSON(500, gin.H{
+					"msg": "fill object fields erorr",
+					"err": fillError.Error(),
+				})
+				return
+			}
 
 			saveError := appctx.Db.Save(&modelCopy)
 			if saveError != nil {
