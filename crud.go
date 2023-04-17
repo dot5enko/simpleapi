@@ -575,9 +575,9 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				return
 			}
 
-			panic("update is not implemented")
+			ref := &modelCopy
 
-			fillable, ok := any(modelCopy).(ApiDtoFillable[CtxType])
+			fillable, ok := any(ref).(ApiDtoFillable[CtxType])
 			if !ok {
 				ctx.JSON(500, gin.H{
 					"msg":  "object is not fillable",
