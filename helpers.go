@@ -46,5 +46,13 @@ func GetArgUint(ctx *gin.Context, name string) uint64 {
 }
 
 func GetUserId(ctx *gin.Context) uint64 {
-	return MustGetObjectFromContext[User](ctx, "user").Id
+
+	userObject := MustGetObjectFromContext[any](ctx, "user")
+
+	features, ok := userObject.(UserFeatures)
+	if !ok {
+		panic("user object doe's not implement simpleapi.UserFeatures")
+	}
+
+	return features.Id()
 }

@@ -24,7 +24,7 @@ var (
 	ErrUserNotExists       = fmt.Errorf("user not exists, this shoult not happen")
 )
 
-func GetTokenOrCreate[CtxType any](appctx *AppContext[CtxType], user User, expiry time.Duration) (result typed.Result[AccessToken]) {
+func GetTokenOrCreate[CtxType any](appctx *AppContext[CtxType], user UserFeatures, expiry time.Duration) (result typed.Result[AccessToken]) {
 
 	tNow := time.Now()
 	var obj AccessToken
@@ -38,8 +38,8 @@ func GetTokenOrCreate[CtxType any](appctx *AppContext[CtxType], user User, expir
 
 		obj.CreatedAt = tNow
 		obj.ExpiredAt = tNow.Add(expiry)
-		obj.UserId = user.Id
-		obj.Value = fmt.Sprintf("%d:%s:%d", tNow.Unix(), uuid.NewString(), user.Id)
+		obj.UserId = user.Id()
+		obj.Value = fmt.Sprintf("%d:%s:%d", tNow.Unix(), uuid.NewString(), user.Id())
 
 		createError := appctx.Db.Create(&obj)
 		if createError != nil {
@@ -53,7 +53,7 @@ func GetTokenOrCreate[CtxType any](appctx *AppContext[CtxType], user User, expir
 	}
 }
 
-func UserByToken[T any](appCtx *AppContext[T], tok string) (result typed.Result[User]) {
+func UserByToken[UserType any, T any](appCtx *AppContext[T], tok string) (result typed.Result[UserType]) {
 
 	var err error
 	var resultToken AccessToken
@@ -73,18 +73,6 @@ func UserByToken[T any](appCtx *AppContext[T], tok string) (result typed.Result[
 		result.SetFail(ErrTokenExpired)
 		return
 	}
-	var resp User
 
-	userFindResult := FindFirstWhere[User](appCtx.Db, "id = ?", resultToken.UserId)
-	err = userFindResult.UnwrapError()
-
-	if err != nil {
-		result.SetFail(ErrUserNotExists)
-		return
-	}
-
-	resp = userFindResult.Unwrap()
-
-	result.SetOk(resp)
-	return
+	return FindFirstWhere[UserType](appCtx.Db, "id = ?", resultToken.UserId)
 }
