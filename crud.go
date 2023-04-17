@@ -5,6 +5,7 @@ import (
 	"log"
 	"reflect"
 
+	"github.com/dot5enko/typed"
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"gorm.io/gorm"
@@ -109,7 +110,7 @@ func (it *CrudConfig[T, CtxType]) UseBeforeCreate(h ...gin.HandlerFunc) *CrudCon
 	return it
 }
 
-func storeObjectInContext[T any, CtxType any](appctx *AppContext[CtxType], ctx *gin.Context) Result[T] {
+func storeObjectInContext[T any, CtxType any](appctx *AppContext[CtxType], ctx *gin.Context) typed.Result[T] {
 	orgId := GetArgUint(ctx, "id")
 
 	result := FindFirstWhere[T](appctx.Db, "id = ?", orgId)
@@ -188,19 +189,19 @@ func checkRole[T any, CtxT any](appctx *AppContext[CtxT], ctx *gin.Context, rela
 	}
 }
 
-func toDto[T any, CtxType any](it T, appctx *AppContext[CtxType], permission int) Result[interface{}] {
+func toDto[T any, CtxType any](it T, appctx *AppContext[CtxType], permission int) typed.Result[interface{}] {
 	dtoPresenter, ok := any(it).(ApiDto[CtxType])
 	if ok {
 
 		_dtoResult := dtoPresenter.ToApiDto(permission, appctx)
 
 		if _dtoResult.IsOk() {
-			return ResultOk[interface{}](_dtoResult.Unwrap())
+			return typed.ResultOk[interface{}](_dtoResult.Unwrap())
 		} else {
-			return ResultFailed[interface{}](_dtoResult.UnwrapError())
+			return typed.ResultFailed[interface{}](_dtoResult.UnwrapError())
 		}
 	} else {
-		return ResultOk[interface{}](it)
+		return typed.ResultOk[interface{}](it)
 	}
 }
 

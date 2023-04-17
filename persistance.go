@@ -1,6 +1,9 @@
 package simpleapi
 
-import "gorm.io/gorm"
+import (
+	"github.com/dot5enko/typed"
+	"gorm.io/gorm"
+)
 
 type BeforeCreateCbAware[CtxType any] interface {
 	BeforeCreate(ctx *AppContext[CtxType]) error
@@ -129,30 +132,30 @@ func (d DbWrapper[CtxType]) Delete(obj any) (err error) {
 	// })
 }
 
-func FindAllWhere[T any, CtxType any](db DbWrapper[CtxType], where string, whereArgs ...any) Result[[]T] {
+func FindAllWhere[T any, CtxType any](db DbWrapper[CtxType], where string, whereArgs ...any) typed.Result[[]T] {
 
 	result := []T{}
 
 	findErr := db.Raw().Where(where, whereArgs...).Find(&result).Error
 
 	if findErr != nil {
-		return ResultFailed[[]T](findErr)
+		return typed.ResultFailed[[]T](findErr)
 	} else {
-		return ResultOk(result)
+		return typed.ResultOk(result)
 	}
 
 }
 
-func FindFirstWhere[T any, CtxType any](db DbWrapper[CtxType], where string, whereArgs ...any) Result[T] {
+func FindFirstWhere[T any, CtxType any](db DbWrapper[CtxType], where string, whereArgs ...any) typed.Result[T] {
 
 	var result T
 
 	findErr := db.Raw().Where(where, whereArgs...).First(&result).Error
 
 	if findErr != nil {
-		return ResultFailed[T](findErr)
+		return typed.ResultFailed[T](findErr)
 	} else {
-		return ResultOk(result)
+		return typed.ResultOk(result)
 	}
 
 }

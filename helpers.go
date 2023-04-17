@@ -4,22 +4,23 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/dot5enko/typed"
 	"github.com/gin-gonic/gin"
 )
 
-func GetObjFromContext[T any](ctx *gin.Context, name string) Result[T] {
+func GetObjFromContext[T any](ctx *gin.Context, name string) typed.Result[T] {
 
 	user, isOk := ctx.Get(name)
 	if isOk {
 		contextObject, ok := user.(T)
 		if !ok {
 			obj := *new(T)
-			return ResultFailed[T](fmt.Errorf("mismatched type of object, have %#v want %#v", user, obj))
+			return typed.ResultFailed[T](fmt.Errorf("mismatched type of object, have %#v want %#v", user, obj))
 		} else {
-			return ResultOk(contextObject)
+			return typed.ResultOk(contextObject)
 		}
 	} else {
-		return ResultFailed[T](fmt.Errorf("no user in request context"))
+		return typed.ResultFailed[T](fmt.Errorf("no user in request context"))
 	}
 
 }

@@ -1,11 +1,12 @@
 package simpleapi
 
 import (
+	"github.com/dot5enko/typed"
 	"github.com/tidwall/gjson"
 )
 
 type ApiDto[CtxType any] interface {
-	ToApiDto(permission int, ctx *AppContext[CtxType]) Result[map[string]interface{}]
+	ToApiDto(permission int, ctx *AppContext[CtxType]) typed.Result[map[string]interface{}]
 }
 
 type ApiDtoFillable[CtxType any] interface {
