@@ -387,30 +387,24 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	// todo impl paging
 	group.GET("", func(ctx *gin.Context) {
 
-		log.Printf("getting list of all items per collection  now. object name is %#+v", model)
-
 		var items []T
 
 		// should be auth check instead
 		if result.skipAuth {
 
 			// todo add paging
-			itemsResult := FindAllWhere[T](appctx.Db, "")
+			FindAllWhere[T](appctx.Db, "").Then(func(t *[]T) *typed.Result[[]T] {
 
-			if !itemsResult.IsOk() {
+				items = *t
 
-				fetchErr := itemsResult.UnwrapError()
-
-				if fetchErr != nil {
-					ctx.AbortWithStatusJSON(404, gin.H{
-						"msg": "db err",
-						"err": fetchErr.Error(),
-					})
-					return
-				}
-			} else {
-				items = itemsResult.Unwrap()
-			}
+				return nil
+			}).Fail(func(e error) {
+				ctx.AbortWithStatusJSON(404, gin.H{
+					"msg": "db err",
+					"err": e.Error(),
+				})
+				return
+			})
 
 		} else {
 
@@ -424,8 +418,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			userRelatedObjects := []UserToObject{}
 
 			authorizeduserId := GetUserId(ctx)
-
-			log.Printf("authorized user id now :%d", authorizeduserId)
 
 			relatedErr := appctx.Db.Raw().
 				Where("user_id = ?", authorizeduserId).
@@ -444,59 +436,45 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			relatedCount := len(userRelatedObjects)
 
 			if relatedCount > 0 {
-				log.Printf("found NON zero related objects: %d", relatedCount)
 				ids := []uint64{}
 
 				for _, it := range userRelatedObjects {
 					ids = append(ids, it.ObjectId)
 				}
 
-				foundResult := FindAllWhere[T](appctx.Db, "id IN ?", ids)
+				FindAllWhere[T](appctx.Db, "id IN ?", ids).Then(func(t *[]T) *typed.Result[[]T] {
 
-				if !foundResult.IsOk() {
+					dtos := []any{}
+					// convert to dto objects
 
-					foundErr := foundResult.UnwrapError()
+					for _, it := range items {
 
-					if foundErr != nil {
-						ctx.JSON(500, gin.H{
-							"msg": "unable to find items",
-							"err": foundErr.Error(),
-						})
+						// check if item has dto converter
+						// todo pass permission value
+						_dtoResult := toDto(it, appctx, 0)
+						if _dtoResult.IsOk() {
+							unwrapped := _dtoResult.Unwrap()
+							dtos = append(dtos, unwrapped)
+						} else {
+							log.Printf("unable to convert object to api dto : %s", _dtoResult.UnwrapError().Error())
+						}
 					}
-				} else {
-					items = foundResult.Unwrap()
-				}
 
-			} else {
-				log.Printf("found zero related objects")
+					ctx.JSON(200, gin.H{
+						"items": dtos,
+					})
+
+					items = *t
+
+					return nil
+				}).Fail(func(foundErr error) {
+					ctx.JSON(500, gin.H{
+						"msg": "unable to find items",
+						"err": foundErr.Error(),
+					})
+				})
 			}
 		}
-
-		dtos := []any{}
-		// convert to dto objects
-
-		for _, it := range items {
-
-			log.Printf(" --> item to dto processing: %#+v", it)
-
-			// check if item has dto converter
-			// todo pass permission value
-			_dtoResult := toDto(it, appctx, 0)
-			if _dtoResult.IsOk() {
-
-				unwrapped := _dtoResult.Unwrap()
-
-				log.Printf("append some result to final result : %#+v", unwrapped)
-
-				dtos = append(dtos, unwrapped)
-			} else {
-				log.Printf("unable to convert object to api dto : %s", _dtoResult.UnwrapError().Error())
-			}
-		}
-
-		ctx.JSON(200, gin.H{
-			"items": dtos,
-		})
 	})
 
 	existingItems := group.Group("/:id")

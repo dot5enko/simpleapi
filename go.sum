@@ -11,6 +11,8 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/dot5enko/typed v1.0.2 h1:f4RUo8yuEUgPQ2ia97/zFBCQ4DmAVVUbBLH16hhyfGg=
 github.com/dot5enko/typed v1.0.2/go.mod h1:qI1aYSgysz8Z0ZSVY45IAoLHGjktCOQs010LL2XZfEs=
+github.com/dot5enko/typed v1.0.3 h1:0YOL9wDkLTzeKFy/8QC7JDlB+nsvYk4BEwVu7brjrIk=
+github.com/dot5enko/typed v1.0.3/go.mod h1:qI1aYSgysz8Z0ZSVY45IAoLHGjktCOQs010LL2XZfEs=
 github.com/gin-contrib/sse v0.1.0 h1:Y/yl/+YNO8GZSjAhjMsSuLt29uWRFHdHYUb5lYOV9qE=
 github.com/gin-contrib/sse v0.1.0/go.mod h1:RHrZQHXnP2xjPF+u1gW/2HnVO7nvIa9PG3Gm+fLHvGI=
 github.com/gin-gonic/gin v1.9.0 h1:OjyFBKICoexlu99ctXNR2gg+c5pKrKMuyjgARg9qeY8=
