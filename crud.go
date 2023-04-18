@@ -436,6 +436,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			relatedCount := len(userRelatedObjects)
 
 			if relatedCount > 0 {
+
+				log.Printf("related items count : %d", relatedCount)
 				ids := []uint64{}
 
 				for _, it := range userRelatedObjects {
@@ -443,6 +445,10 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				}
 
 				FindAllWhere[T](appctx.Db, "id IN ?", ids).Then(func(t *[]T) *typed.Result[[]T] {
+
+					log.Printf("found items in ids %#+v: %d", ids, len(*t))
+
+					items = *t
 
 					dtos := []any{}
 					// convert to dto objects
