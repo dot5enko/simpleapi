@@ -9,5 +9,5 @@ type UserToObject struct {
 }
 
 type UserFeatures interface {
-	Id() uint64
+	GetId() uint64
 }

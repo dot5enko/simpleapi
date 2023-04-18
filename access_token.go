@@ -29,7 +29,7 @@ func GetTokenOrCreate[CtxType any](appctx *AppContext[CtxType], user UserFeature
 	tNow := time.Now()
 	var obj AccessToken
 
-	findResult := FindFirstWhere[AccessToken](appctx.Db, "user_id = ? && expired_at > ?", user.Id, tNow)
+	findResult := FindFirstWhere[AccessToken](appctx.Db, "user_id = ? and expired_at > ?", user.GetId(), tNow)
 
 	findErr := findResult.UnwrapError()
 
@@ -38,8 +38,8 @@ func GetTokenOrCreate[CtxType any](appctx *AppContext[CtxType], user UserFeature
 
 		obj.CreatedAt = tNow
 		obj.ExpiredAt = tNow.Add(expiry)
-		obj.UserId = user.Id()
-		obj.Value = fmt.Sprintf("%d:%s:%d", tNow.Unix(), uuid.NewString(), user.Id())
+		obj.UserId = user.GetId()
+		obj.Value = fmt.Sprintf("%d:%s:%d", tNow.Unix(), uuid.NewString(), user.GetId())
 
 		createError := appctx.Db.Create(&obj)
 		if createError != nil {

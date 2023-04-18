@@ -54,5 +54,5 @@ func GetUserId(ctx *gin.Context) uint64 {
 		panic("user object doe's not implement simpleapi.UserFeatures")
 	}
 
-	return features.Id()
+	return features.GetId()
 }

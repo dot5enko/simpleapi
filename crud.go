@@ -387,6 +387,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	// todo impl paging
 	group.GET("", func(ctx *gin.Context) {
 
+		log.Printf("getting list of all items per collection  now. object name is %#+v", model)
+
 		var items []T
 
 		// should be auth check instead
@@ -421,8 +423,12 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 			userRelatedObjects := []UserToObject{}
 
+			authorizeduserId := GetUserId(ctx)
+
+			log.Printf("authorized user id now :%d", authorizeduserId)
+
 			relatedErr := appctx.Db.Raw().
-				Where("user_id = ?", GetUserId(ctx)).
+				Where("user_id = ?", authorizeduserId).
 				Table(result.relTypeTable).
 				Find(&userRelatedObjects).
 				Error
@@ -435,8 +441,10 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				return
 			}
 
-			if len(userRelatedObjects) > 0 {
+			relatedCount := len(userRelatedObjects)
 
+			if relatedCount > 0 {
+				log.Printf("found NON zero related objects: %d", relatedCount)
 				ids := []uint64{}
 
 				for _, it := range userRelatedObjects {
@@ -455,8 +463,12 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 							"err": foundErr.Error(),
 						})
 					}
+				} else {
+					items = foundResult.Unwrap()
 				}
 
+			} else {
+				log.Printf("found zero related objects")
 			}
 		}
 
@@ -465,11 +477,18 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		for _, it := range items {
 
+			log.Printf(" --> item to dto processing: %#+v", it)
+
 			// check if item has dto converter
 			// todo pass permission value
 			_dtoResult := toDto(it, appctx, 0)
 			if _dtoResult.IsOk() {
-				dtos = append(dtos, _dtoResult.Unwrap())
+
+				unwrapped := _dtoResult.Unwrap()
+
+				log.Printf("append some result to final result : %#+v", unwrapped)
+
+				dtos = append(dtos, unwrapped)
 			} else {
 				log.Printf("unable to convert object to api dto : %s", _dtoResult.UnwrapError().Error())
 			}
