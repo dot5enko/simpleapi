@@ -25,6 +25,7 @@ type ApiTags struct {
 
 	Fillable bool
 	Outable  bool
+	Internal bool
 
 	FillName *string
 }
@@ -86,11 +87,20 @@ func GetFieldTags[CtxType any](obj any) (objMapp FieldsMapping) {
 
 	for i := 0; i < fields_count; i++ {
 
-		result := ApiTags{}
+		result := ApiTags{
+			Internal: false,
+		}
 		fieldData := _type.Field(i)
 
 		declaredName := fieldData.Name
 		defName := ToSnake(declaredName)
+
+		api, has_api := fieldData.Tag.Lookup("api")
+		if has_api {
+			if api == "-" {
+				result.Internal = true
+			}
+		}
 
 		fillable, has_fill := fieldData.Tag.Lookup("fill")
 		if has_fill {
@@ -132,11 +142,11 @@ func GetFieldTags[CtxType any](obj any) (objMapp FieldsMapping) {
 
 		log.Printf(" field `%s`: tags : %#+v", fieldData.Name, tag)
 
-		if result.Fillable {
+		if !result.Internal && result.Fillable {
 			objMapp.Fillable = append(objMapp.Fillable, declaredName)
 		}
 
-		if result.Outable {
+		if !result.Internal && result.Outable {
 			objMapp.Outable = append(objMapp.Outable, declaredName)
 		}
 

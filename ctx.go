@@ -9,6 +9,16 @@ import (
 	"gorm.io/gorm"
 )
 
+func NewAppContext[T any](ctx *T) *AppContext[T] {
+
+	app := &AppContext[T]{
+		Data:    ctx,
+		objects: map[string]FieldsMapping{},
+	}
+
+	return app
+}
+
 type AppContext[T any] struct {
 	Data    *T
 	Request *gin.Context
