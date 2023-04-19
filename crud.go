@@ -159,6 +159,37 @@ func UserRelationRole[T any](
 	return int8(relationInfo.Role)
 }
 
+// todo add role
+func GetUserRelatedObjects[T any](
+	appctx *AppContext[T],
+	reltable TblName,
+) []uint64 {
+
+	userId := GetUserId(appctx.Request)
+
+	var relationInfo []UserToObject
+
+	err := appctx.Db.Raw().Table(reltable.TableName()).
+		Where("user_id = ? ", userId).
+		Find(&relationInfo).
+		Error
+
+	if err != nil {
+
+		log.Printf("unable to get user related objects: %s", err.Error())
+
+		return nil
+	}
+
+	result := []uint64{}
+
+	for _, relInfo := range relationInfo {
+		result = append(result, relInfo.ObjectId)
+	}
+
+	return result
+}
+
 func getIdValue[T any](obj T) uint64 {
 	val := reflect.Indirect(reflect.ValueOf(obj))
 	return val.FieldByName("Id").Uint()
@@ -397,78 +428,89 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		} else {
 
+			ids := []uint64{}
+
 			if result.relTypeTable == "" {
-				ctx.AbortWithStatusJSON(404, gin.H{
-					"msg": "no such endpoint",
-				})
-				return
-			}
+				if result.permTable == nil {
+					ctx.AbortWithStatusJSON(404, gin.H{
+						"msg": "no such endpoint",
+					})
+					return
+				} else {
+					// get parent object ids
+					ids = GetUserRelatedObjects(appctx, result.permTable)
+				}
+			} else {
 
-			userRelatedObjects := []UserToObject{}
+				// looks like relTypeTable and permTable is the same
+				userRelatedObjects := []UserToObject{}
 
-			authorizeduserId := GetUserId(ctx)
+				authorizeduserId := GetUserId(ctx)
 
-			relatedErr := appctx.Db.Raw().
-				Where("user_id = ?", authorizeduserId).
-				Table(result.relTypeTable).
-				Find(&userRelatedObjects).
-				Error
+				relatedErr := appctx.Db.Raw().
+					Where("user_id = ?", authorizeduserId).
+					Table(result.relTypeTable).
+					Find(&userRelatedObjects).
+					Error
 
-			if relatedErr != nil {
-				ctx.AbortWithStatusJSON(500, gin.H{
-					"msg": "unable to get related objects",
-					"err": relatedErr.Error(),
-				})
-				return
-			}
-
-			relatedCount := len(userRelatedObjects)
-
-			if relatedCount > 0 {
-
-				log.Printf("related items count : %d", relatedCount)
-				ids := []uint64{}
-
-				for _, it := range userRelatedObjects {
-					ids = append(ids, it.ObjectId)
+				if relatedErr != nil {
+					ctx.AbortWithStatusJSON(500, gin.H{
+						"msg": "unable to get related objects",
+						"err": relatedErr.Error(),
+					})
+					return
 				}
 
-				FindAllWhere[T](appctx.Db, "id IN ?", ids).Then(func(t *[]T) *typed.Result[[]T] {
+				relatedCount := len(userRelatedObjects)
 
-					log.Printf("found items in ids %#+v: %d", ids, len(*t))
-
-					items = *t
-
-					dtos := []any{}
-					// convert to dto objects
-
-					for _, it := range items {
-
-						// check if item has dto converter
-						// todo pass permission value
-						_dtoResult := toDto(it, appctx, 0)
-						if _dtoResult.IsOk() {
-							unwrapped := _dtoResult.Unwrap()
-							dtos = append(dtos, unwrapped)
-						} else {
-							log.Printf("unable to convert object to api dto : %s", _dtoResult.UnwrapError().Error())
-						}
+				if relatedCount > 0 {
+					for _, it := range userRelatedObjects {
+						ids = append(ids, it.ObjectId)
 					}
+				}
+			}
 
-					ctx.JSON(200, gin.H{
-						"items": dtos,
-					})
-
-					items = *t
-
-					return nil
-				}).Fail(func(foundErr error) {
-					ctx.JSON(500, gin.H{
-						"msg": "unable to find items",
-						"err": foundErr.Error(),
-					})
+			if len(ids) == 0 {
+				ctx.JSON(200, gin.H{
+					"items": []any{},
 				})
 			}
+
+			FindAllWhere[T](appctx.Db, "id IN ?", ids).Then(func(t *[]T) *typed.Result[[]T] {
+
+				log.Printf("found items in ids %#+v: %d", ids, len(*t))
+
+				items = *t
+
+				dtos := []any{}
+				// convert to dto objects
+
+				for _, it := range items {
+
+					// check if item has dto converter
+					// todo pass permission value
+					_dtoResult := toDto(it, appctx, 0)
+					if _dtoResult.IsOk() {
+						unwrapped := _dtoResult.Unwrap()
+						dtos = append(dtos, unwrapped)
+					} else {
+						log.Printf("unable to convert object to api dto : %s", _dtoResult.UnwrapError().Error())
+					}
+				}
+
+				ctx.JSON(200, gin.H{
+					"items": dtos,
+				})
+
+				items = *t
+
+				return nil
+			}).Fail(func(foundErr error) {
+				ctx.JSON(500, gin.H{
+					"msg": "unable to find items",
+					"err": foundErr.Error(),
+				})
+			})
 		}
 	})
 
