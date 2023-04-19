@@ -437,8 +437,12 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 					})
 					return
 				} else {
+
+					appctx.Request = ctx
+
 					// get parent object ids
 					ids = GetUserRelatedObjects(appctx, result.permTable)
+					appctx.Request = nil
 				}
 			} else {
 

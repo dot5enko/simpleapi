@@ -27,6 +27,10 @@ func GetObjFromContext[T any](ctx *gin.Context, name string) typed.Result[T] {
 
 func MustGetObjectFromContext[T any](ctx *gin.Context, name string) T {
 
+	if ctx == nil {
+		panic("ctx is null, can't get anything of it")
+	}
+
 	result := GetObjFromContext[T](ctx, name)
 	if !result.IsOk() {
 		panic(fmt.Sprintf("error while getting val from context : %s", result.UnwrapError().Error()))
