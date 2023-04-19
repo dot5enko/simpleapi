@@ -330,6 +330,11 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 						return rightsErr
 					}
+				} else {
+					// todo check if no auth disabled
+					if result.CrudGroup.Config.Auth {
+						log.Printf(" warning: no rights to check for endpoint, but auth is not globally disabled. when creating %#+v", result.Model)
+					}
 				}
 			}
 
