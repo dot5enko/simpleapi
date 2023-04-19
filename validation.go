@@ -1,12 +1,9 @@
 package simpleapi
 
 import (
-	"fmt"
 	"log"
 	"reflect"
 	"strings"
-
-	"github.com/tidwall/gjson"
 )
 
 type FieldValidation int
@@ -34,6 +31,9 @@ type ApiTags struct {
 
 type FieldsMapping struct {
 	Fields map[string]ApiTags
+
+	FillExtraMethod bool
+	OutExtraMethod  bool
 
 	Fillable []string
 	Outable  []string
@@ -65,11 +65,20 @@ func ToSnake(camel string) (snake string) {
 	return b.String()
 }
 
-func GetFieldTags(obj any) (objMapp FieldsMapping) {
+func GetFieldTags[CtxType any](obj any) (objMapp FieldsMapping) {
 
 	objMapp.Fields = make(map[string]ApiTags)
 	objMapp.Outable = []string{}
 	objMapp.Fillable = []string{}
+
+	// check interfaces here once for app run
+	{
+		_, additionalFill := obj.(ApiDtoFillable[CtxType])
+		objMapp.FillExtraMethod = additionalFill
+
+		_, additionalDto := obj.(ApiDto[CtxType])
+		objMapp.OutExtraMethod = additionalDto
+	}
 
 	reflectedObject := reflect.ValueOf(obj)
 	_type := reflect.Indirect(reflectedObject).Type()
@@ -160,53 +169,4 @@ type FillFromDtoOptions struct {
 
 	// not implemented
 	DontAllowExtraFields bool
-}
-
-func (m FieldsMapping) FromDto(obj any, dto gjson.Result, options FillFromDtoOptions) (err error) {
-
-	reflected := reflect.Indirect(reflect.ValueOf(obj))
-
-	if !reflected.CanSet() {
-		return fmt.Errorf("object is not addressable, can't fill from dto")
-	}
-
-	for _, fieldName := range m.Fillable {
-
-		func() {
-			defer func() {
-				r := recover()
-
-				if r != nil {
-					err = fmt.Errorf("unable to fill `%s` from dto. reflection error: %s", fieldName, r)
-				}
-			}()
-
-			fieldInfo := m.Fields[fieldName]
-
-			field := reflected.FieldByName(fieldName)
-
-			dtoFieldToUse := *fieldInfo.FillName
-
-			fieldType := field.Type()
-
-			fieldTypeKind := fieldType.Kind()
-
-			var dtoData any
-
-			if fieldTypeKind >= 2 && fieldTypeKind <= 6 {
-				// cast to int
-				dtoData = dto.Get(dtoFieldToUse).Int()
-			} else {
-				if fieldTypeKind >= 7 && fieldTypeKind <= 11 {
-					dtoData = dto.Get(dtoFieldToUse).Uint()
-				} else {
-					dtoData = dto.Get(dtoFieldToUse).Value()
-				}
-			}
-
-			field.Set(reflect.ValueOf(dtoData))
-		}()
-	}
-
-	return
 }

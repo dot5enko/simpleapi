@@ -189,19 +189,19 @@ func checkRole[T any, CtxT any](appctx *AppContext[CtxT], ctx *gin.Context, rela
 	}
 }
 
-func toDto[T any, CtxType any](it T, appctx *AppContext[CtxType], permission int) typed.Result[interface{}] {
-	dtoPresenter, ok := any(it).(ApiDto[CtxType])
-	if ok {
+func toDto[T any, CtxType any](it T, appctx *AppContext[CtxType], permission int) typed.Result[map[string]any] {
 
-		_dtoResult := dtoPresenter.ToApiDto(permission, appctx)
+	m := appctx.Db.ApiData(it)
 
-		if _dtoResult.IsOk() {
-			return typed.ResultOk[interface{}](_dtoResult.Unwrap())
-		} else {
-			return typed.ResultFailed[interface{}](_dtoResult.UnwrapError())
-		}
+	rawDto := m.ToDto(it)
+
+	if m.OutExtraMethod {
+
+		dtoPresenter, _ := any(it).(ApiDto[CtxType])
+
+		return dtoPresenter.ToApiDto(rawDto, permission, appctx)
 	} else {
-		return typed.ResultOk[interface{}](it)
+		return typed.ResultOk(rawDto)
 	}
 }
 
@@ -280,33 +280,17 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			return
 		}
 
-		modelFillable, ok := any(&modelCopy).(ApiDtoFillable[CtxType])
+		// default fill from model tags
+		parsedJson := gjson.ParseBytes(data)
 
-		if !ok {
+		fillError := appctx.FillEntityFromDto(&modelCopy, parsedJson, nil)
 
+		if fillError != nil {
 			ctx.JSON(500, gin.H{
-				"msg": "unable to decode object info. object is not fillable",
-				// "err": unmarshalErr.Error(),
+				"msg": "can't fill object with provided data",
+				"err": fillError,
 			})
 			return
-
-			// unmarshalErr := json.Unmarshal(data, &modelCopy)
-
-			// if unmarshalErr != nil {
-
-			// }
-		} else {
-			parsedJson := gjson.ParseBytes(data)
-
-			// todo move in transaction
-			fillError := modelFillable.FromDto(parsedJson, appctx)
-			if fillError != nil {
-				ctx.JSON(500, gin.H{
-					"msg": "can't fill object with provided data",
-					"err": fillError,
-				})
-				return
-			}
 		}
 
 		createdErr := appctx.Db.Raw().Transaction(func(tx *gorm.DB) error {
@@ -586,16 +570,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 			ref := &modelCopy
 
-			fillable, ok := any(ref).(ApiDtoFillable[CtxType])
-			if !ok {
-				ctx.JSON(500, gin.H{
-					"msg":  "object is not fillable",
-					"type": fmt.Sprintf("%#+v", modelCopy),
-				})
-				return
-			}
-
-			fillError := fillable.FromDto(parsed, appctx)
+			fillError := appctx.FillEntityFromDto(ref, parsed, nil)
 
 			if fillError != nil {
 				ctx.JSON(500, gin.H{
