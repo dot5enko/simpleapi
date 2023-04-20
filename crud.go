@@ -38,6 +38,7 @@ type CrudConfig[T any, CtxType any] struct {
 	afterCreate  func(ctx *AppContext[CtxType], obj *T) error
 
 	permTable                 TblName
+	permFieldName             string
 	permRelatedObjectIdGetter RelatedObjectIdGetter[T]
 
 	relTypeTable string
@@ -86,9 +87,17 @@ func (it *CrudConfig[T, CtxType]) HasMultiple(relations ...ApiObjectRelation[T, 
 	return it
 }
 
-func (it *CrudConfig[T, CtxType]) PermissionTable(relationsTable TblName, relatedIdGetter RelatedObjectIdGetter[T]) *CrudConfig[T, CtxType] {
+func (it *CrudConfig[T, CtxType]) PermissionTable(relationsTable TblName, relatedIdGetter RelatedObjectIdGetter[T], field_name ...string) *CrudConfig[T, CtxType] {
 
 	it.permTable = relationsTable
+
+	// trick``
+	if len(field_name) > 0 {
+		it.permFieldName = field_name[0]
+	} else {
+		it.permFieldName = ""
+	}
+
 	it.permRelatedObjectIdGetter = relatedIdGetter
 
 	return it
@@ -220,7 +229,7 @@ func checkRole[T any, CtxT any](appctx *AppContext[CtxT], ctx *gin.Context, rela
 	}
 }
 
-func toDto[T any, CtxType any](it T, appctx *AppContext[CtxType], permission int) typed.Result[map[string]any] {
+func ToDto[T any, CtxType any](it T, appctx *AppContext[CtxType], permission int) typed.Result[map[string]any] {
 
 	m := appctx.Db.ApiData(it)
 
@@ -399,7 +408,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		ctx.JSON(200, gin.H{
 			"created": true,
-			"object":  toDto(modelCopy, appctx, 0).Unwrap(),
+			"object":  ToDto(modelCopy, appctx, 0).Unwrap(),
 		})
 	})
 
@@ -408,6 +417,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	group.GET("", func(ctx *gin.Context) {
 
 		var items []T
+		fieldName := "id"
 
 		// should be auth check instead
 		if result.skipAuth {
@@ -438,10 +448,23 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 					return
 				} else {
 
+					if result.permFieldName == "" {
+						ctx.AbortWithStatusJSON(404, gin.H{
+							"msg": "no such endpoint",
+							"err": "related table field name not provided in config, can't get all realted objects",
+						})
+						return
+					}
+
 					appctx.Request = ctx
 
 					// get parent object ids
 					ids = GetUserRelatedObjects(appctx, result.permTable)
+
+					log.Printf("ids found: %d", len(ids))
+
+					fieldName = result.permFieldName
+
 					appctx.Request = nil
 				}
 			} else {
@@ -480,7 +503,9 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				})
 			}
 
-			FindAllWhere[T](appctx.Db, "id IN ?", ids).Then(func(t *[]T) *typed.Result[[]T] {
+			condition := fmt.Sprintf("%s IN ?", fieldName)
+
+			FindAllWhere[T](appctx.Db, condition, ids).Then(func(t *[]T) *typed.Result[[]T] {
 
 				log.Printf("found items in ids %#+v: %d", ids, len(*t))
 
@@ -493,7 +518,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 					// check if item has dto converter
 					// todo pass permission value
-					_dtoResult := toDto(it, appctx, 0)
+					_dtoResult := ToDto(it, appctx, 0)
 					if _dtoResult.IsOk() {
 						unwrapped := _dtoResult.Unwrap()
 						dtos = append(dtos, unwrapped)
@@ -634,7 +659,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				})
 			} else {
 				ctx.JSON(200, gin.H{
-					"item": toDto(modelCopy, appctx, 0).Unwrap(),
+					"item": ToDto(modelCopy, appctx, 0).Unwrap(),
 				})
 			}
 		}
@@ -698,7 +723,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			// todo get role
 
 			ctx.JSON(200, gin.H{
-				"item": toDto(modelCopy, appctx, 0).Unwrap(),
+				"item": ToDto(modelCopy, appctx, 0).Unwrap(),
 			})
 		}
 	})
