@@ -238,7 +238,6 @@ func ToDto[T any, CtxType any](it T, appctx *AppContext[CtxType], permission int
 	if m.OutExtraMethod {
 
 		dtoPresenter, _ := any(it).(ApiDto[CtxType])
-
 		return dtoPresenter.ToApiDto(rawDto, permission, appctx)
 	} else {
 		return typed.ResultOk(rawDto)
@@ -506,8 +505,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			condition := fmt.Sprintf("%s IN ?", fieldName)
 
 			FindAllWhere[T](appctx.Db, condition, ids).Then(func(t *[]T) *typed.Result[[]T] {
-
-				log.Printf("found items in ids %#+v: %d", ids, len(*t))
 
 				items = *t
 

@@ -72,6 +72,10 @@ func GetFieldTags[CtxType any](obj any) (objMapp FieldsMapping) {
 	objMapp.Outable = []string{}
 	objMapp.Fillable = []string{}
 
+	reflectedObject := reflect.ValueOf(obj)
+	_type := reflect.Indirect(reflectedObject).Type()
+	fields_count := _type.NumField()
+
 	// check interfaces here once for app run
 	{
 		_, additionalFill := obj.(ApiDtoFillable[CtxType])
@@ -79,11 +83,9 @@ func GetFieldTags[CtxType any](obj any) (objMapp FieldsMapping) {
 
 		_, additionalDto := obj.(ApiDto[CtxType])
 		objMapp.OutExtraMethod = additionalDto
-	}
 
-	reflectedObject := reflect.ValueOf(obj)
-	_type := reflect.Indirect(reflectedObject).Type()
-	fields_count := _type.NumField()
+		log.Printf(" -- type %s : extra out : %v, extra fill : %v", _type.Name(), additionalDto, additionalFill)
+	}
 
 	for i := 0; i < fields_count; i++ {
 

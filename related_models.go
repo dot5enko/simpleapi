@@ -85,7 +85,7 @@ func RelatedItemHandlerImpl[OfType any, CtxType any, RelatedType any](appctx *Ap
 				// }
 
 				for _, it := range outItems {
-					morphed = append(morphed, toDto(it, appctx, 0).Unwrap())
+					morphed = append(morphed, ToDto(it, appctx, 0).Unwrap())
 				}
 
 				ctx.JSON(200, gin.H{
