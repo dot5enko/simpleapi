@@ -413,6 +413,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 	// get list
 	// todo impl paging
+	// todo implement filters by fields
 	group.GET("", func(ctx *gin.Context) {
 
 		var items []T
