@@ -31,6 +31,8 @@ type ApiTags struct {
 }
 
 type FieldsMapping struct {
+	TypeName string
+
 	Fields map[string]ApiTags
 
 	FillExtraMethod bool

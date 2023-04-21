@@ -262,8 +262,6 @@ func CheckRights[T any, CtxType any](
 
 	minRoleRequired := 0
 
-	log.Printf("Checking rights for related %d, for user %d. related object : %#+v", relatedId, userId, obj)
-
 	userRole := UserRelationRole(appctx, relatedId, userId, tbName, uint8(minRoleRequired))
 
 	if userRole >= 0 {
@@ -307,7 +305,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	// create
 	group.POST("", func(ctx *gin.Context) {
 
-		modelCopy := model
+		var modelCopy T
 
 		// create new object
 		data, err := ctx.GetRawData()
@@ -327,7 +325,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		if fillError != nil {
 			ctx.JSON(500, gin.H{
 				"msg": "can't fill object with provided data",
-				"err": fillError,
+				"err": fillError.Error(),
 			})
 			return
 		}

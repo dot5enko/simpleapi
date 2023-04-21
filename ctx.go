@@ -40,14 +40,21 @@ func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *Fil
 		return fmt.Errorf("object is not addressable, can't fill from dto")
 	}
 
-	for _, fieldName := range m.Fillable {
+	br := false
 
-		func() {
+	for _, _fieldName := range m.Fillable {
+
+		if br {
+			break
+		}
+
+		func(fieldName string) {
 			defer func() {
 				r := recover()
 
 				if r != nil {
-					err = fmt.Errorf("unable to fill `%s` from dto. reflection error: %s", fieldName, r)
+					err = fmt.Errorf("unable to fill `%s` from dto: %s. fields available", fieldName, r)
+					br = true
 				}
 			}()
 
@@ -58,8 +65,15 @@ func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *Fil
 			dtoFieldToUse := *fieldInfo.FillName
 
 			fieldType := field.Type()
-
 			fieldTypeKind := fieldType.Kind()
+
+			// if field.IsZero() {
+			// 	err = fmt.Errorf("unable to find a `%s` field on type : %s. field type and kind : %s %s type declared : %s",
+			// 		fieldName, reflected.Type().Name(), fieldType.Name(), fieldTypeKind.String(), m.TypeName,
+			// 	)
+			// 	br = true
+			// 	return
+			// }
 
 			var dtoData any
 
@@ -74,8 +88,11 @@ func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *Fil
 				}
 			}
 
-			field.Set(reflect.ValueOf(dtoData))
-		}()
+			if dtoData != nil {
+				field.Set(reflect.ValueOf(dtoData))
+			}
+
+		}(_fieldName)
 	}
 
 	if m.FillExtraMethod {
@@ -95,7 +112,9 @@ func (c DbWrapper[T]) Migrate(object any) {
 	m.AutoMigrate(object)
 
 	objTypeName := GetObjectType(object)
-	c.app.objects[objTypeName] = GetFieldTags[T](object)
+	el := GetFieldTags[T](object)
+	el.TypeName = objTypeName
+	c.app.objects[objTypeName] = el
 }
 
 func (c DbWrapper[T]) ApiData(object any) FieldsMapping {
