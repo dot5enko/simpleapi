@@ -4,6 +4,7 @@ import (
 	"log"
 	"reflect"
 	"strings"
+	"time"
 )
 
 type FieldValidation int
@@ -21,7 +22,11 @@ type ValidationRuleSet struct {
 type ApiTags struct {
 	Validate *string
 	Name     *string
-	Role     *string
+
+	TypeKind reflect.Kind
+	Typ      string
+
+	Role *string
 
 	Fillable bool
 	Outable  bool
@@ -99,6 +104,12 @@ func GetFieldTags[CtxType any](obj any) (objMapp FieldsMapping) {
 		declaredName := fieldData.Name
 		defName := ToSnake(declaredName)
 
+		ftype := fieldData.Type
+		result.TypeKind = ftype.Kind()
+		if result.TypeKind == reflect.Struct {
+			result.Typ = ftype.PkgPath() + "/" + ftype.Name()
+		}
+
 		api, has_api := fieldData.Tag.Lookup("api")
 		if has_api {
 			if api == "-" {
@@ -144,7 +155,7 @@ func GetFieldTags[CtxType any](obj any) (objMapp FieldsMapping) {
 			result.Role = &role
 		}
 
-		log.Printf(" field `%s`: tags : %#+v", fieldData.Name, tag)
+		log.Printf(" --- field `%s`: tags : %#+v", fieldData.Name, tag)
 
 		if !result.Internal && result.Fillable {
 			objMapp.Fillable = append(objMapp.Fillable, declaredName)
@@ -173,7 +184,27 @@ func (m FieldsMapping) ToDto(obj any) map[string]any {
 
 	for _, fieldName := range m.Outable {
 		fieldInfo := m.Fields[fieldName]
-		result[*fieldInfo.Name] = reflected.FieldByName(fieldName).Interface()
+
+		ivalue := reflected.FieldByName(fieldName).Interface()
+
+		var val any = ivalue
+
+		if fieldInfo.TypeKind == reflect.Struct {
+
+			if fieldInfo.Typ == "time/Time" {
+
+				switch ivalueTyped := ivalue.(type) {
+				case time.Time:
+					{
+						val = ivalueTyped.Unix()
+					}
+				}
+
+			}
+
+		}
+
+		result[*fieldInfo.Name] = val
 	}
 
 	return result
