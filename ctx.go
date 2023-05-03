@@ -30,6 +30,10 @@ type AppContext[T any] struct {
 	isolated bool
 }
 
+var (
+	ErrNumberOverflow = fmt.Errorf("field value overflows type")
+)
+
 func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *FillFromDtoOptions) (err error) {
 
 	m := c.Db.ApiData(obj)
@@ -77,14 +81,30 @@ func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *Fil
 
 			var dtoData any
 
-			if fieldTypeKind >= 2 && fieldTypeKind <= 6 {
-				// cast to int
-				dtoData = dto.Get(dtoFieldToUse).Int()
-			} else {
-				if fieldTypeKind >= 7 && fieldTypeKind <= 11 {
-					dtoData = dto.Get(dtoFieldToUse).Uint()
+			jsonFieldValue := dto.Get(dtoFieldToUse)
+
+			switch fieldTypeKind {
+			case reflect.Uint8:
+				uintval := jsonFieldValue.Uint()
+
+				if uintval > 255 {
+					err = ErrNumberOverflow
+					br = true
+					return
 				} else {
-					dtoData = dto.Get(dtoFieldToUse).Value()
+					dtoData = uint8(uintval)
+				}
+
+			default:
+				if fieldTypeKind >= 2 && fieldTypeKind <= 6 {
+					// cast to int
+					dtoData = dto.Get(dtoFieldToUse).Int()
+				} else {
+					if fieldTypeKind >= 7 && fieldTypeKind <= 11 {
+						dtoData = dto.Get(dtoFieldToUse).Uint()
+					} else {
+						dtoData = dto.Get(dtoFieldToUse).Value()
+					}
 				}
 			}
 
