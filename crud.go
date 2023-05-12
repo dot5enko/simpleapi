@@ -425,6 +425,26 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 				items = *t
 
+				dtos := []any{}
+				// convert to dto objects
+
+				for _, it := range items {
+
+					// check if item has dto converter
+					// todo pass permission value
+					_dtoResult := ToDto(it, appctx, 0)
+					if _dtoResult.IsOk() {
+						unwrapped := _dtoResult.Unwrap()
+						dtos = append(dtos, unwrapped)
+					} else {
+						log.Printf("unable to convert object to api dto : %s", _dtoResult.UnwrapError().Error())
+					}
+				}
+
+				ctx.JSON(200, gin.H{
+					"items": dtos,
+				})
+
 				return nil
 			}).Fail(func(e error) {
 				ctx.AbortWithStatusJSON(404, gin.H{
@@ -526,8 +546,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				ctx.JSON(200, gin.H{
 					"items": dtos,
 				})
-
-				items = *t
 
 				return nil
 			}).Fail(func(foundErr error) {

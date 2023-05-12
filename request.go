@@ -24,12 +24,12 @@ func (handlers *HandlersChain[T, X]) Use(h ...RequestHandler[T, X]) {
 	*handlers = append(*handlers, h...)
 }
 
-func (handlers HandlersChain[T, X]) ProcessRequest(ginCtx *gin.Context, app *AppContext[X]) {
+func (handlers HandlersChain[T, X]) ProcessRequest(ginCtx *gin.Context, app *AppContext[X], requestCtx *T) {
 
 	ourCtx := &RequestContext[T, X]{
 		Http: ginCtx,
 		App:  app,
-		Data: new(T),
+		Data: requestCtx,
 	}
 
 	for _, it := range handlers {

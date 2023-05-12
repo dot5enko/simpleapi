@@ -173,7 +173,7 @@ func GetFieldTags[CtxType any](obj any) (objMapp FieldsMapping) {
 
 func GetObjectType(obj any) string {
 	tobj := reflect.Indirect(reflect.ValueOf(obj)).Type()
-	return tobj.PkgPath() + tobj.Name()
+	return tobj.PkgPath() + "." + tobj.Name()
 }
 
 func (m FieldsMapping) ToDto(obj any) map[string]any {
