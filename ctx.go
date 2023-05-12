@@ -2,7 +2,9 @@ package simpleapi
 
 import (
 	"fmt"
+	"log"
 	"reflect"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -84,6 +86,19 @@ func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *Fil
 			jsonFieldValue := dto.Get(dtoFieldToUse)
 
 			switch fieldTypeKind {
+			case reflect.Struct:
+
+				if fieldInfo.Typ == "time/Time" {
+
+					unixts := dto.Get(dtoFieldToUse).Int()
+					tread := time.Unix(unixts, 0)
+
+					dtoData = tread
+
+				} else {
+					log.Panicf("unsupported field (%s) type to set from json: %s", fieldName, fieldInfo.Typ)
+				}
+
 			case reflect.Uint8:
 				uintval := jsonFieldValue.Uint()
 
