@@ -673,8 +673,20 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				saveErr := appctx.Db.Save(&modelCopy)
 
 				if saveErr == nil {
-					// fieldsData := appctx.Db.ApiData(ref)
 
+					fieldsData := appctx.Db.ApiData(ref)
+
+					if fieldsData.UpdateExtraMethod {
+						// get updater
+
+						log.Printf("model(%s) has an update event handler", fieldsData.TypeName)
+
+						objUpdater, _ := any(ref).(OnUpdateEventHandler[CtxType, T])
+						updateEventError := objUpdater.OnUpdate(appctx, modelCopy, *ref)
+						if updateEventError != nil {
+							return updateEventError
+						}
+					}
 				}
 
 				return saveErr
