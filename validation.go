@@ -35,6 +35,8 @@ type ApiTags struct {
 	FillName *string
 }
 
+type OnUpdateExecutor[T any] func(prev T, cur T)
+
 type FieldsMapping struct {
 	TypeName string
 
@@ -42,6 +44,8 @@ type FieldsMapping struct {
 
 	FillExtraMethod bool
 	OutExtraMethod  bool
+
+	UpdateExtraMethod bool
 
 	Fillable []string
 	Outable  []string
@@ -73,7 +77,7 @@ func ToSnake(camel string) (snake string) {
 	return b.String()
 }
 
-func GetFieldTags[CtxType any](obj any) (objMapp FieldsMapping) {
+func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 
 	objMapp.Fields = make(map[string]ApiTags)
 	objMapp.Outable = []string{}
@@ -91,7 +95,10 @@ func GetFieldTags[CtxType any](obj any) (objMapp FieldsMapping) {
 		_, additionalDto := obj.(ApiDto[CtxType])
 		objMapp.OutExtraMethod = additionalDto
 
-		log.Printf(" -- type %s : extra out : %v, extra fill : %v", _type.Name(), additionalDto, additionalFill)
+		_, additionalOnUpdate := obj.(OnUpdateEventHandler[CtxType, T])
+		objMapp.UpdateExtraMethod = additionalOnUpdate
+
+		log.Printf(" -- type %s : extra out : %v, extra fill : %v. onupdate : %v", _type.Name(), additionalDto, additionalFill, additionalOnUpdate)
 	}
 
 	for i := 0; i < fields_count; i++ {

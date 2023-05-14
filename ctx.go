@@ -140,6 +140,20 @@ func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *Fil
 	return
 }
 
+type MigrateInitializer func(object any) FieldsMapping
+
+func (c DbWrapper[T]) MigrateWithOnUpdate(object any, initalizer MigrateInitializer) {
+
+	m := c.db.Migrator()
+
+	m.AutoMigrate(object)
+
+	objTypeName := GetObjectType(object)
+	el := initalizer(object)
+	el.TypeName = objTypeName
+	c.app.objects[objTypeName] = el
+}
+
 func (c DbWrapper[T]) Migrate(object any) {
 
 	m := c.db.Migrator()
@@ -147,7 +161,7 @@ func (c DbWrapper[T]) Migrate(object any) {
 	m.AutoMigrate(object)
 
 	objTypeName := GetObjectType(object)
-	el := GetFieldTags[T](object)
+	el := GetFieldTags[T, any](object)
 	el.TypeName = objTypeName
 	c.app.objects[objTypeName] = el
 }

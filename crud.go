@@ -665,7 +665,21 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				return
 			}
 
-			saveError := appctx.Db.Save(&modelCopy)
+			saveError := appctx.Db.Raw().Transaction(func(tx *gorm.DB) error {
+
+				isolatedContext := appctx.isolateDatabase(tx)
+				isolatedContext.Request = ctx
+
+				saveErr := appctx.Db.Save(&modelCopy)
+
+				if saveErr == nil {
+					// fieldsData := appctx.Db.ApiData(ref)
+
+				}
+
+				return saveErr
+			})
+
 			if saveError != nil {
 				ctx.JSON(404, gin.H{
 					"msg": "unable to update object",
