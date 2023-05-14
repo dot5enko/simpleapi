@@ -653,7 +653,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				return
 			}
 
-			ref := &modelCopy
+			anotherCopy := modelCopy
+			ref := &anotherCopy
 
 			fillError := appctx.FillEntityFromDto(ref, parsed, nil)
 
