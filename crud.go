@@ -22,7 +22,9 @@ type CrudContext[T any, CtxType any] struct {
 }
 
 type ModelIdFetcher[T any] func(obj *T) uint64
-type RelatedObjectIdGetter[T any] func(obj *T) uint64
+
+// object id could be non integer
+type RelatedObjectIdGetter[T any] func(obj *T) any
 type RelatedItemsFetcher[OfType any, RelatedType any] func(ctx *gin.Context)
 
 type CrudConfig[T any, CtxType any] struct {
@@ -47,6 +49,15 @@ type CrudConfig[T any, CtxType any] struct {
 
 	passObject bool
 	skipAuth   bool
+
+	objectIdField string
+}
+
+func (it *CrudConfig[T, CtxType]) IdField(fieldName string) *CrudConfig[T, CtxType] {
+
+	it.objectIdField = fieldName
+
+	return it
 }
 
 func (it CrudConfig[T, CtxType]) RelTable() string {
@@ -148,7 +159,7 @@ func createRelAfterSave[T any, CtxType any](appctx *AppContext[CtxType], obj *T,
 // user has no access to object
 func UserRelationRole[T any](
 	appctx *AppContext[T],
-	objectId uint64,
+	objectId any,
 	userId uint64,
 	reltable TblName,
 	role uint8,
@@ -279,11 +290,12 @@ func (result *CrudConfig[T, CtxType]) NoAuth() *CrudConfig[T, CtxType] {
 func New[T any, CtxType any](crudGroup *CrudGroup[CtxType], group *gin.RouterGroup, model T) *CrudConfig[T, CtxType] {
 
 	result := CrudConfig[T, CtxType]{
-		ParentGroup: group,
-		Model:       model,
-		App:         &crudGroup.Ctx,
-		CrudGroup:   crudGroup,
-		skipAuth:    !crudGroup.Config.Auth,
+		ParentGroup:   group,
+		Model:         model,
+		App:           &crudGroup.Ctx,
+		CrudGroup:     crudGroup,
+		skipAuth:      !crudGroup.Config.Auth,
+		objectIdField: crudGroup.Config.ObjectIdFieldName,
 	}
 
 	// todo check rights in all methods
@@ -621,7 +633,10 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		var modelCopy T
 
 		idParam := ctx.Param("id")
-		findResult := FindFirstWhere[T](appctx.Db, "id = ?", idParam)
+		// todo cache
+		q := fmt.Sprintf("%s = ?", result.objectIdField)
+
+		findResult := FindFirstWhere[T](appctx.Db, q, idParam)
 
 		if !findResult.IsOk() {
 
@@ -711,7 +726,9 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		idParam := ctx.Param("id")
 
-		findResult := FindFirstWhere[T](appctx.Db, "id = ?", idParam)
+		q := fmt.Sprintf("%s = ?", result.objectIdField)
+
+		findResult := FindFirstWhere[T](appctx.Db, q, idParam)
 
 		if !findResult.IsOk() {
 
@@ -744,17 +761,18 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	existingItems.GET("", func(ctx *gin.Context) {
 
 		idParam := ctx.Param("id")
-
 		modelCopy := model
 
-		findResult := FindFirstWhere[T](appctx.Db, "id = ?", idParam)
+		q := fmt.Sprintf("%s = ?", result.objectIdField)
+
+		findResult := FindFirstWhere[T](appctx.Db, q, idParam)
 
 		// todo validate
 		errFirst := findResult.UnwrapError()
 
 		if errFirst != nil {
 			ctx.JSON(404, gin.H{
-				"msg": "object not found",
+				"msg": "object not found, ",
 				"err": errFirst.Error(),
 			})
 		} else {

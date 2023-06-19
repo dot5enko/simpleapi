@@ -7,7 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RelatedItemHandlerImpl[OfType any, CtxType any, RelatedType any](appctx *AppContext[CtxType], idGetter RelatedObjectIdGetter[OfType], parentIdField, apiPath string) {
+func RelatedItemHandlerImpl[OfType any, CtxType any, RelatedType any](appctx *AppContext[CtxType], idGetter RelatedObjectIdGetter[OfType], parentIdField, apiPath string, idFieldName string) {
 
 	ctx := appctx.Request
 
@@ -18,12 +18,14 @@ func RelatedItemHandlerImpl[OfType any, CtxType any, RelatedType any](appctx *Ap
 
 	_db := appctx.Db.Raw()
 
+	q := fmt.Sprintf("%s = ?", idFieldName)
+
 	// todo validate
-	errFirst := _db.Model(&model).Where("id = ?", idParam).First(&modelCopy).Error
+	errFirst := _db.Model(&model).Where(q, idParam).First(&modelCopy).Error
 
 	if errFirst != nil {
 		ctx.JSON(404, gin.H{
-			"msg": "object not found",
+			"msg": "related object not found",
 			"err": errFirst.Error(),
 		})
 	} else {
@@ -97,12 +99,12 @@ func RelatedItemHandlerImpl[OfType any, CtxType any, RelatedType any](appctx *Ap
 
 }
 
-func RelatedModels[Related any, CtxType any, OfType any](pathSuffix, childIdField string, idgetter RelatedObjectIdGetter[OfType]) ApiObjectRelation[OfType, CtxType] {
+func RelatedModels[Related any, CtxType any, OfType any](groupConfig *CrudGroup[CtxType], pathSuffix, childIdField string, idgetter RelatedObjectIdGetter[OfType]) ApiObjectRelation[OfType, CtxType] {
 	return ApiObjectRelation[OfType, CtxType]{
 		ParentObjectIdField: childIdField,
 		PathSuffix:          pathSuffix,
 		ItemHandler: func(appctx *AppContext[CtxType], that *ApiObjectRelation[OfType, CtxType]) {
-			RelatedItemHandlerImpl[OfType, CtxType, Related](appctx, idgetter, that.ParentObjectIdField, that.PathSuffix)
+			RelatedItemHandlerImpl[OfType, CtxType, Related](appctx, idgetter, that.ParentObjectIdField, that.PathSuffix, groupConfig.Config.ObjectIdFieldName)
 		},
 	}
 }

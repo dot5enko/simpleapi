@@ -6,7 +6,8 @@ type CrudGroup[T any] struct {
 }
 
 type CrudGroupConfig struct {
-	Auth bool
+	Auth              bool
+	ObjectIdFieldName string
 }
 
 func NewCrudGroup[T any](ctx AppContext[T], config CrudGroupConfig) *CrudGroup[T] {

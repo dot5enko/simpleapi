@@ -154,6 +154,12 @@ func (c DbWrapper[T]) MigrateWithOnUpdate(object any, initalizer MigrateInitiali
 	c.app.objects[objTypeName] = el
 }
 
+func (c DbWrapper[T]) MigrateAll(objects ...any) {
+	for _, it := range objects {
+		c.Migrate(it)
+	}
+}
+
 func (c DbWrapper[T]) Migrate(object any) {
 
 	m := c.db.Migrator()
