@@ -36,6 +36,10 @@ var (
 	ErrNumberOverflow = fmt.Errorf("field value overflows type")
 )
 
+func (c AppContext[T]) RegisteredTypes() map[string]FieldsMapping {
+	return c.objects
+}
+
 func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *FillFromDtoOptions) (err error) {
 
 	m := c.Db.ApiData(obj)
@@ -98,6 +102,9 @@ func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *Fil
 				} else {
 					log.Panicf("unsupported field (%s) type to set from json: %s", fieldName, fieldInfo.Typ)
 				}
+			case reflect.Int:
+				intVal := jsonFieldValue.Int()
+				dtoData = int(intVal)
 
 			case reflect.Uint8:
 				uintval := jsonFieldValue.Uint()
@@ -111,6 +118,11 @@ func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *Fil
 				}
 
 			default:
+
+				if fieldName == "AppType" {
+					log.Printf("app type field kind : %d", fieldTypeKind)
+				}
+
 				if fieldTypeKind >= 2 && fieldTypeKind <= 6 {
 					// cast to int
 					dtoData = dto.Get(dtoFieldToUse).Int()

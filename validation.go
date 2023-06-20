@@ -115,6 +115,8 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 		result.TypeKind = ftype.Kind()
 		if result.TypeKind == reflect.Struct {
 			result.Typ = ftype.PkgPath() + "/" + ftype.Name()
+		} else {
+			result.Typ = ftype.Name()
 		}
 
 		api, has_api := fieldData.Tag.Lookup("api")
@@ -162,7 +164,7 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 			result.Role = &role
 		}
 
-		log.Printf(" --- field `%s`: tags : %#+v", fieldData.Name, tag)
+		// log.Printf(" --- field `%s`: tags : %#+v", fieldData.Name, tag)
 
 		if !result.Internal && result.Fillable {
 			objMapp.Fillable = append(objMapp.Fillable, declaredName)

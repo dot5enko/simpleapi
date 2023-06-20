@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"time"
 
 	"github.com/dot5enko/typed"
 	"github.com/gin-gonic/gin"
@@ -686,7 +687,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				isolatedContext := appctx.isolateDatabase(tx)
 				isolatedContext.Request = ctx
 
-				saveErr := appctx.Db.Save(&modelCopy)
+				saveErr := appctx.Db.Save(&anotherCopy)
 
 				if saveErr == nil {
 
@@ -760,6 +761,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 	existingItems.GET("", func(ctx *gin.Context) {
 
+		start := time.Now()
+
 		idParam := ctx.Param("id")
 		modelCopy := model
 
@@ -780,6 +783,11 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			modelCopy = findResult.Unwrap()
 
 			// todo get role
+
+			dur := time.Since(start)
+			durFloat := float64(dur.Nanoseconds()) / 1e6
+
+			ctx.Writer.Header().Add("Server-Timing", fmt.Sprintf("miss, app;dur=%.2f", durFloat))
 
 			ctx.JSON(200, gin.H{
 				"item": ToDto(modelCopy, appctx, 0).Unwrap(),
