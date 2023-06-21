@@ -1,9 +1,11 @@
 package simpleapi
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/dot5enko/typed"
@@ -430,11 +432,31 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		var items []T
 		fieldName := "id"
 
+		filters := ""
+		filterArgs := []any{}
+
+		// filters
+		// todo make it secure!
+		{
+			parts := []string{}
+
+			// decode query
+			filtersMap := map[string]any{}
+			json.Unmarshal([]byte(ctx.Query("filter")), &filtersMap)
+
+			for filterFieldName, filterValue := range filtersMap {
+				parts = append(parts, fmt.Sprintf("%s = ?", filterFieldName))
+				filterArgs = append(filterArgs, filterValue)
+			}
+
+			filters = strings.Join(parts, " AND ")
+		}
+
 		// should be auth check instead
 		if result.skipAuth {
 
 			// todo add paging
-			FindAllWhere[T](appctx.Db, "").Then(func(t *[]T) *typed.Result[[]T] {
+			FindAllWhere[T](appctx.Db, filters, filterArgs...).Then(func(t *[]T) *typed.Result[[]T] {
 
 				items = *t
 
