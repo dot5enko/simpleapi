@@ -89,6 +89,11 @@ func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *Fil
 
 			jsonFieldValue := dto.Get(dtoFieldToUse)
 
+			if !jsonFieldValue.Exists() {
+				// skip non passed fields to update
+				return
+			}
+
 			switch fieldTypeKind {
 			case reflect.Struct:
 

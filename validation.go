@@ -192,28 +192,39 @@ func (m FieldsMapping) ToDto(obj any) map[string]any {
 	reflected := reflect.ValueOf(obj)
 
 	for _, fieldName := range m.Outable {
-		fieldInfo := m.Fields[fieldName]
 
-		ivalue := reflected.FieldByName(fieldName).Interface()
+		func() {
 
-		var val any = ivalue
+			defer func() {
+				r := recover()
+				if r != nil {
+					log.Printf(" recovered on a key :%s \n%s", fieldName, r)
+				}
+			}()
 
-		if fieldInfo.TypeKind == reflect.Struct {
+			fieldInfo := m.Fields[fieldName]
 
-			if fieldInfo.Typ == "time/Time" {
+			ivalue := reflected.FieldByName(fieldName).Interface()
 
-				switch ivalueTyped := ivalue.(type) {
-				case time.Time:
-					{
-						val = ivalueTyped.Unix()
+			var val any = ivalue
+
+			if fieldInfo.TypeKind == reflect.Struct {
+
+				if fieldInfo.Typ == "time/Time" {
+
+					switch ivalueTyped := ivalue.(type) {
+					case time.Time:
+						{
+							val = ivalueTyped.Unix()
+						}
 					}
+
 				}
 
 			}
 
-		}
-
-		result[*fieldInfo.Name] = val
+			result[*fieldInfo.Name] = val
+		}()
 	}
 
 	return result
