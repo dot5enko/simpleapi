@@ -313,12 +313,37 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	model := result.Model
 	appctx := result.App
 
+	var writePermissionMiddleware gin.HandlerFunc = func(ctx *gin.Context) {
+		wp := result.CrudGroup.Config.WritePermission
+		hasPermission := (*wp)(ctx, appctx)
+		if !hasPermission {
+			ctx.AbortWithStatusJSON(403, gin.H{
+				"msg": "No permission",
+			})
+			return
+		}
+	}
+
+	// todo make at compile time
+	rp := result.CrudGroup.Config.ReadPermission
+	if rp != nil {
+		group.Use(func(ctx *gin.Context) {
+			hasPermission := (*rp)(ctx, appctx)
+			if !hasPermission {
+				ctx.AbortWithStatusJSON(403, gin.H{
+					"msg": "No permission",
+				})
+				return
+			}
+		})
+	}
+
 	if result.beforeCreate != nil {
 		group.Use(result.beforeCreate...)
 	}
 
 	// create
-	group.POST("", func(ctx *gin.Context) {
+	group.POST("", writePermissionMiddleware, func(ctx *gin.Context) {
 
 		var modelCopy T
 
@@ -428,6 +453,18 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	// todo impl paging
 	// todo implement filters by fields
 	group.GET("", func(ctx *gin.Context) {
+
+		// todo make at compile time
+		wp := result.CrudGroup.Config.WritePermission
+		if wp != nil {
+			hasPermission := (*wp)(ctx, appctx)
+			if !hasPermission {
+				ctx.JSON(404, gin.H{
+					"msg": "Not found",
+				})
+				return
+			}
+		}
 
 		var items []T
 		fieldName := "id"
@@ -651,7 +688,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		}
 	})
 
-	existingItems.PATCH("", func(ctx *gin.Context) {
+	existingItems.PATCH("", writePermissionMiddleware, func(ctx *gin.Context) {
 
 		var modelCopy T
 
@@ -745,7 +782,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 	})
 
-	existingItems.DELETE("", func(ctx *gin.Context) {
+	existingItems.DELETE("", writePermissionMiddleware, func(ctx *gin.Context) {
 
 		idParam := ctx.Param("id")
 

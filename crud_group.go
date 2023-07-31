@@ -1,16 +1,23 @@
 package simpleapi
 
+import "github.com/gin-gonic/gin"
+
 type CrudGroup[T any] struct {
 	Ctx    AppContext[T]
-	Config CrudGroupConfig
+	Config CrudGroupConfig[T]
 }
 
-type CrudGroupConfig struct {
+type HasPermissionChecker[T any] func(req *gin.Context, ctx *AppContext[T]) bool
+
+type CrudGroupConfig[T any] struct {
 	Auth              bool
 	ObjectIdFieldName string
+
+	WritePermission *HasPermissionChecker[T]
+	ReadPermission  *HasPermissionChecker[T]
 }
 
-func NewCrudGroup[T any](ctx AppContext[T], config CrudGroupConfig) *CrudGroup[T] {
+func NewCrudGroup[T any](ctx AppContext[T], config CrudGroupConfig[T]) *CrudGroup[T] {
 
 	result := &CrudGroup[T]{
 		Ctx:    ctx,
