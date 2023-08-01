@@ -176,7 +176,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		hasPermission := (*wp)(ctx, appctx)
 		if !hasPermission {
 			ctx.AbortWithStatusJSON(403, gin.H{
-				"msg": "No write permission",
+				"msg": "No write permission, code updated",
 			})
 			return
 		}
