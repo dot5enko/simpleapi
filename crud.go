@@ -318,7 +318,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		hasPermission := (*wp)(ctx, appctx)
 		if !hasPermission {
 			ctx.AbortWithStatusJSON(403, gin.H{
-				"msg": "No permission",
+				"msg": "No write permission",
 			})
 			return
 		}
@@ -331,7 +331,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			hasPermission := (*rp)(ctx, appctx)
 			if !hasPermission {
 				ctx.AbortWithStatusJSON(403, gin.H{
-					"msg": "No permission",
+					"msg": "No read permission",
 				})
 				return
 			}
@@ -453,18 +453,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	// todo impl paging
 	// todo implement filters by fields
 	group.GET("", func(ctx *gin.Context) {
-
-		// todo make at compile time
-		wp := result.CrudGroup.Config.WritePermission
-		if wp != nil {
-			hasPermission := (*wp)(ctx, appctx)
-			if !hasPermission {
-				ctx.JSON(404, gin.H{
-					"msg": "Not found",
-				})
-				return
-			}
-		}
 
 		var items []T
 		fieldName := "id"
