@@ -10,7 +10,6 @@ type CrudGroup[T any] struct {
 type HasPermissionChecker[T any] func(req *gin.Context, ctx *AppContext[T]) bool
 
 type CrudGroupConfig[T any] struct {
-	Auth              bool
 	ObjectIdFieldName string
 
 	WritePermission *HasPermissionChecker[T]

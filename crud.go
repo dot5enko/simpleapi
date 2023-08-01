@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"reflect"
 	"strings"
 	"time"
@@ -51,9 +52,16 @@ type CrudConfig[T any, CtxType any] struct {
 	hasMultiple []ApiObjectRelation[T, CtxType]
 
 	passObject bool
-	skipAuth   bool
+
+	disableFilterOverFields map[string]bool
 
 	objectIdField string
+
+	paging PagingConfig
+}
+
+type PagingConfig struct {
+	PerPage int
 }
 
 func (it *CrudConfig[T, CtxType]) IdField(fieldName string) *CrudConfig[T, CtxType] {
@@ -285,20 +293,21 @@ func CheckRights[T any, CtxType any](
 	}
 }
 
-func (result *CrudConfig[T, CtxType]) NoAuth() *CrudConfig[T, CtxType] {
-	result.skipAuth = true
-	return result
-}
-
 func New[T any, CtxType any](crudGroup *CrudGroup[CtxType], group *gin.RouterGroup, model T) *CrudConfig[T, CtxType] {
 
 	result := CrudConfig[T, CtxType]{
-		ParentGroup:   group,
-		Model:         model,
-		App:           &crudGroup.Ctx,
-		CrudGroup:     crudGroup,
-		skipAuth:      !crudGroup.Config.Auth,
-		objectIdField: crudGroup.Config.ObjectIdFieldName,
+		ParentGroup: group,
+		Model:       model,
+		App:         &crudGroup.Ctx,
+		CrudGroup:   crudGroup,
+
+		// todo remove
+		objectIdField:           crudGroup.Config.ObjectIdFieldName,
+		disableFilterOverFields: map[string]bool{},
+
+		paging: PagingConfig{
+			PerPage: 30,
+		},
 	}
 
 	// todo check rights in all methods
@@ -375,7 +384,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			isolatedContext := appctx.isolateDatabase(tx)
 			isolatedContext.Request = ctx
 
-			if true {
+			if false { // remove code
 				// todo optimize check
 				if result.permTable != nil && result.permRelatedObjectIdGetter != nil {
 
@@ -390,11 +399,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 					if rightsErr != nil {
 
 						return rightsErr
-					}
-				} else {
-					// todo check if no auth disabled
-					if result.CrudGroup.Config.Auth {
-						log.Printf(" warning: no rights to check for endpoint, but auth is not globally disabled. when creating %#+v", result.Model)
 					}
 				}
 			}
@@ -449,16 +453,29 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		})
 	})
 
+	type ListQueryParams struct {
+		SortField string `json:"sort_field"`
+		SortOrder int    `json:"order"`
+		Page      int    `json:"page"`
+	}
+
 	// get list
 	// todo impl paging
 	// todo implement filters by fields
 	group.GET("", func(ctx *gin.Context) {
 
+		var modelObj T
+
 		var items []T
-		fieldName := "id"
+		// fieldName := "id"
 
 		filters := ""
 		filterArgs := []any{}
+
+		hasDisabledFields := len(result.disableFilterOverFields) > 0
+
+		listQueryParams := ListQueryParams{}
+		ctx.BindQuery(&listQueryParams)
 
 		// filters
 		// todo make it secure!
@@ -470,6 +487,17 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			json.Unmarshal([]byte(ctx.Query("filter")), &filtersMap)
 
 			for filterFieldName, filterValue := range filtersMap {
+
+				// allow only whitelisted fields
+
+				// if result.CrudGroup.Config.DisableFilter
+				if hasDisabledFields {
+					_, disabled := result.disableFilterOverFields[filterFieldName]
+					if disabled {
+						continue
+					}
+				}
+
 				parts = append(parts, fmt.Sprintf("%s = ?", filterFieldName))
 				filterArgs = append(filterArgs, filterValue)
 			}
@@ -478,143 +506,62 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		}
 
 		// should be auth check instead
-		if result.skipAuth {
 
-			// todo add paging
-			FindAllWhere[T](appctx.Db, filters, filterArgs...).Then(func(t *[]T) *typed.Result[[]T] {
-
-				items = *t
-
-				dtos := []any{}
-				// convert to dto objects
-
-				for _, it := range items {
-
-					// check if item has dto converter
-					// todo pass permission value
-					_dtoResult := ToDto(it, appctx, 0)
-					if _dtoResult.IsOk() {
-						unwrapped := _dtoResult.Unwrap()
-						dtos = append(dtos, unwrapped)
-					} else {
-						log.Printf("unable to convert object to api dto : %s", _dtoResult.UnwrapError().Error())
-					}
-				}
-
-				ctx.JSON(200, gin.H{
-					"items": dtos,
-				})
-
-				return nil
-			}).Fail(func(e error) {
-				ctx.AbortWithStatusJSON(404, gin.H{
-					"msg": "db err",
-					"err": e.Error(),
-				})
-				return
-			})
-
-		} else {
-
-			ids := []uint64{}
-
-			if result.relTypeTable == "" {
-				if result.permTable == nil {
-					ctx.AbortWithStatusJSON(404, gin.H{
-						"msg": "no such endpoint",
-					})
-					return
-				} else {
-
-					if result.permFieldName == "" {
-						ctx.AbortWithStatusJSON(404, gin.H{
-							"msg": "no such endpoint",
-							"err": "related table field name not provided in config, can't get all realted objects",
-						})
-						return
-					}
-
-					appctx.Request = ctx
-
-					// get parent object ids
-					ids = GetUserRelatedObjects(appctx, result.permTable)
-
-					log.Printf("ids found: %d", len(ids))
-
-					fieldName = result.permFieldName
-
-					appctx.Request = nil
-				}
-			} else {
-
-				// looks like relTypeTable and permTable is the same
-				userRelatedObjects := []UserToObject{}
-
-				authorizeduserId := GetUserId(ctx)
-
-				relatedErr := appctx.Db.Raw().
-					Where("user_id = ?", authorizeduserId).
-					Table(result.relTypeTable).
-					Find(&userRelatedObjects).
-					Error
-
-				if relatedErr != nil {
-					ctx.AbortWithStatusJSON(500, gin.H{
-						"msg": "unable to get related objects",
-						"err": relatedErr.Error(),
-					})
-					return
-				}
-
-				relatedCount := len(userRelatedObjects)
-
-				if relatedCount > 0 {
-					for _, it := range userRelatedObjects {
-						ids = append(ids, it.ObjectId)
-					}
-				}
-			}
-
-			if len(ids) == 0 {
-				ctx.JSON(200, gin.H{
-					"items": []any{},
-				})
-			}
-
-			condition := fmt.Sprintf("%s IN ?", fieldName)
-
-			FindAllWhere[T](appctx.Db, condition, ids).Then(func(t *[]T) *typed.Result[[]T] {
-
-				items = *t
-
-				dtos := []any{}
-				// convert to dto objects
-
-				for _, it := range items {
-
-					// check if item has dto converter
-					// todo pass permission value
-					_dtoResult := ToDto(it, appctx, 0)
-					if _dtoResult.IsOk() {
-						unwrapped := _dtoResult.Unwrap()
-						dtos = append(dtos, unwrapped)
-					} else {
-						log.Printf("unable to convert object to api dto : %s", _dtoResult.UnwrapError().Error())
-					}
-				}
-
-				ctx.JSON(200, gin.H{
-					"items": dtos,
-				})
-
-				return nil
-			}).Fail(func(foundErr error) {
-				ctx.JSON(500, gin.H{
-					"msg": "unable to find items",
-					"err": foundErr.Error(),
-				})
-			})
+		curPage := listQueryParams.Page
+		if curPage <= 0 {
+			curPage = 1
 		}
+
+		limitVal := result.paging.PerPage
+		offsetVal := (curPage - 1) * result.paging.PerPage
+
+		totalItems := int64(0)
+		// todo dont count soft removed
+		appctx.Db.Raw().Model(&modelObj).Count(&totalItems)
+		pagesCount := math.Ceil(float64(totalItems) / float64(result.paging.PerPage))
+
+		// todo add paging
+		SortAndFindAllWhere[T](appctx.Db,
+			listQueryParams.SortField,
+			listQueryParams.SortOrder,
+			limitVal,
+			offsetVal,
+			filters,
+			filterArgs...).Then(func(t *[]T) *typed.Result[[]T] {
+
+			items = *t
+
+			dtos := []any{}
+			// convert to dto objects
+
+			for _, it := range items {
+
+				// check if item has dto converter
+				// todo pass permission value
+				_dtoResult := ToDto(it, appctx, 0)
+				if _dtoResult.IsOk() {
+					unwrapped := _dtoResult.Unwrap()
+					dtos = append(dtos, unwrapped)
+				} else {
+					log.Printf("unable to convert object to api dto : %s", _dtoResult.UnwrapError().Error())
+				}
+			}
+
+			ctx.JSON(200, gin.H{
+				"items":       dtos,
+				"pages":       pagesCount,
+				"total_items": totalItems,
+			})
+
+			return nil
+		}).Fail(func(e error) {
+			ctx.AbortWithStatusJSON(404, gin.H{
+				"msg": "db err",
+				"err": e.Error(),
+			})
+			return
+		})
+
 	})
 
 	existingItems := group.Group("/:id")

@@ -1,6 +1,8 @@
 package simpleapi
 
 import (
+	"fmt"
+
 	"github.com/dot5enko/typed"
 	"gorm.io/gorm"
 )
@@ -134,6 +136,39 @@ func (d DbWrapper[CtxType]) Delete(obj any) (err error) {
 	// return d.db.Transaction(func(tx *gorm.DB) error {
 	// 	return _isolatedCreate(obj, d.app.isolateDatabase(tx))
 	// })
+}
+
+func SortAndFindAllWhere[T any, CtxType any](db DbWrapper[CtxType], sortByField string, sortBy int, limit, offset int, where string, whereArgs ...any) typed.Result[[]T] {
+
+	result := []T{}
+
+	sortOrder := "ASC"
+	if sortBy == -1 {
+		sortOrder = "DESC"
+	}
+
+	dbQ := db.Raw()
+
+	if limit > 0 {
+		dbQ = dbQ.Limit(limit)
+	}
+
+	if offset > 0 {
+		dbQ = dbQ.Offset(offset)
+	}
+
+	if sortByField != "" {
+		dbQ = dbQ.Order(fmt.Sprintf("%s %s", sortByField, sortOrder))
+	}
+
+	findErr := dbQ.Where(where, whereArgs...).Find(&result).Error
+
+	if findErr != nil {
+		return typed.ResultFailed[[]T](findErr)
+	} else {
+		return typed.ResultOk(result)
+	}
+
 }
 
 func FindAllWhere[T any, CtxType any](db DbWrapper[CtxType], where string, whereArgs ...any) typed.Result[[]T] {
