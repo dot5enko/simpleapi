@@ -158,7 +158,8 @@ func SortAndFindAllWhere[T any, CtxType any](db DbWrapper[CtxType], sortByField 
 	}
 
 	if sortByField != "" {
-		dbQ = dbQ.Order(fmt.Sprintf("%s %s", sortByField, sortOrder))
+		sortQValue := fmt.Sprintf("%s %s", sortByField, sortOrder)
+		dbQ = dbQ.Order(sortQValue)
 	}
 
 	findErr := dbQ.Where(where, whereArgs...).Find(&result).Error

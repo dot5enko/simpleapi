@@ -2,6 +2,8 @@ package simpleapi
 
 import (
 	"fmt"
+	"log"
+	"reflect"
 	"runtime/debug"
 
 	"github.com/gin-gonic/gin"
@@ -107,4 +109,48 @@ func RelatedModels[Related any, CtxType any, OfType any](groupConfig *CrudGroup[
 			RelatedItemHandlerImpl[OfType, CtxType, Related](appctx, idgetter, that.ParentObjectIdField, that.PathSuffix, groupConfig.Config.ObjectIdFieldName)
 		},
 	}
+}
+
+func createRelAfterSave[T any, CtxType any](appctx *AppContext[CtxType], obj *T, relTable string) error {
+
+	var relation UserToObject
+
+	// todo optimize
+	val := reflect.Indirect(reflect.ValueOf(obj))
+
+	relation.ObjectId = val.FieldByName("Id").Uint()
+	relation.UserId = GetUserId(appctx.Request)
+
+	return appctx.Db.Raw().Table(relTable).Create(&relation).Error
+}
+
+// todo add role
+func GetUserRelatedObjects[T any](
+	appctx *AppContext[T],
+	reltable TblName,
+) []uint64 {
+
+	userId := GetUserId(appctx.Request)
+
+	var relationInfo []UserToObject
+
+	err := appctx.Db.Raw().Table(reltable.TableName()).
+		Where("user_id = ? ", userId).
+		Find(&relationInfo).
+		Error
+
+	if err != nil {
+
+		log.Printf("unable to get user related objects: %s", err.Error())
+
+		return nil
+	}
+
+	result := []uint64{}
+
+	for _, relInfo := range relationInfo {
+		result = append(result, relInfo.ObjectId)
+	}
+
+	return result
 }

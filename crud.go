@@ -109,22 +109,6 @@ func (it *CrudConfig[T, CtxType]) HasMultiple(relations ...ApiObjectRelation[T, 
 	return it
 }
 
-func (it *CrudConfig[T, CtxType]) PermissionTable(relationsTable TblName, relatedIdGetter RelatedObjectIdGetter[T], field_name ...string) *CrudConfig[T, CtxType] {
-
-	it.permTable = relationsTable
-
-	// trick``
-	if len(field_name) > 0 {
-		it.permFieldName = field_name[0]
-	} else {
-		it.permFieldName = ""
-	}
-
-	it.permRelatedObjectIdGetter = relatedIdGetter
-
-	return it
-}
-
 func (it *CrudConfig[T, CtxType]) OnAfterCreate(h func(appctx *AppContext[CtxType], obj *T) error) *CrudConfig[T, CtxType] {
 	it.afterCreate = h
 	return it
@@ -153,144 +137,9 @@ func storeObjectInContext[T any, CtxType any](appctx *AppContext[CtxType], ctx *
 	return result
 }
 
-func createRelAfterSave[T any, CtxType any](appctx *AppContext[CtxType], obj *T, relTable string) error {
-
-	var relation UserToObject
-
-	// todo optimize
-	val := reflect.Indirect(reflect.ValueOf(obj))
-
-	relation.ObjectId = val.FieldByName("Id").Uint()
-	relation.UserId = GetUserId(appctx.Request)
-
-	return appctx.Db.Raw().Table(relTable).Create(&relation).Error
-}
-
-// returns -1 if no role attached
-// user has no access to object
-func UserRelationRole[T any](
-	appctx *AppContext[T],
-	objectId any,
-	userId uint64,
-	reltable TblName,
-	role uint8,
-) int8 {
-
-	var relationInfo UserToObject
-
-	err := appctx.Db.Raw().Table(reltable.TableName()).
-		Where("object_id = ? and user_id = ? ", objectId, userId).
-		First(&relationInfo).
-		Error
-
-	if err != nil {
-		return -1
-	}
-
-	return int8(relationInfo.Role)
-}
-
-// todo add role
-func GetUserRelatedObjects[T any](
-	appctx *AppContext[T],
-	reltable TblName,
-) []uint64 {
-
-	userId := GetUserId(appctx.Request)
-
-	var relationInfo []UserToObject
-
-	err := appctx.Db.Raw().Table(reltable.TableName()).
-		Where("user_id = ? ", userId).
-		Find(&relationInfo).
-		Error
-
-	if err != nil {
-
-		log.Printf("unable to get user related objects: %s", err.Error())
-
-		return nil
-	}
-
-	result := []uint64{}
-
-	for _, relInfo := range relationInfo {
-		result = append(result, relInfo.ObjectId)
-	}
-
-	return result
-}
-
 func getIdValue[T any](obj T) uint64 {
 	val := reflect.Indirect(reflect.ValueOf(obj))
 	return val.FieldByName("Id").Uint()
-}
-
-func checkRole[T any, CtxT any](appctx *AppContext[CtxT], ctx *gin.Context, relatedTable string) bool {
-
-	objContext := MustGetObjectFromContext[T](ctx, "_object")
-	userId := GetUserId(ctx)
-
-	// todo optimize
-	objectId := getIdValue(objContext)
-
-	var relationInfo UserToObject
-
-	err := appctx.Db.Raw().Table(relatedTable).
-		Where("object_id = ? and user_id = ? ", objectId, userId).
-		First(&relationInfo).Error
-
-	if err != nil {
-		return false
-	} else {
-
-		// check if user has proper access rights ?
-		// or do this later in specific action ?
-		ctx.Set("_role", relationInfo)
-		return true
-	}
-}
-
-func ToDto[T any, CtxType any](it T, appctx *AppContext[CtxType], permission int) typed.Result[map[string]any] {
-
-	m := appctx.Db.ApiData(it)
-
-	rawDto := m.ToDto(it)
-
-	if m.OutExtraMethod {
-
-		dtoPresenter, _ := any(it).(ApiDto[CtxType])
-		return dtoPresenter.ToApiDto(rawDto, permission, appctx)
-	} else {
-		return typed.ResultOk(rawDto)
-	}
-}
-
-func CheckRights[T any, CtxType any](
-	crudContext CrudContext[T, CtxType],
-	obj *T,
-	relatedIdGetter RelatedObjectIdGetter[T],
-	tbName TblName,
-) error {
-
-	appctx := crudContext.App
-
-	if appctx.Request == nil {
-		log.Printf("checking rights on empty request")
-	}
-
-	userId := GetUserId(appctx.Request)
-	relatedId := relatedIdGetter(obj)
-
-	minRoleRequired := 0
-
-	userRole := UserRelationRole(appctx, relatedId, userId, tbName, uint8(minRoleRequired))
-
-	if userRole >= 0 {
-		return nil
-	} else {
-		return ErrNoRightToPerformAction
-	}
 }
 
 func New[T any, CtxType any](crudGroup *CrudGroup[CtxType], group *gin.RouterGroup, model T) *CrudConfig[T, CtxType] {
@@ -454,9 +303,9 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	})
 
 	type ListQueryParams struct {
-		SortField string `json:"sort_field"`
-		SortOrder int    `json:"order"`
-		Page      int    `json:"page"`
+		SortField string `form:"sort_field"`
+		SortOrder int    `form:"order"`
+		Page      int    `form:"page"`
 	}
 
 	// get list
@@ -477,6 +326,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		listQueryParams := ListQueryParams{}
 		ctx.BindQuery(&listQueryParams)
 
+		modelDataStruct := appctx.Db.ApiData(modelObj)
+
 		// filters
 		// todo make it secure!
 		{
@@ -489,6 +340,11 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			for filterFieldName, filterValue := range filtersMap {
 
 				// allow only whitelisted fields
+				_, canBeFiltered := modelDataStruct.Filterable[filterFieldName]
+
+				if !canBeFiltered {
+					continue
+				}
 
 				// if result.CrudGroup.Config.DisableFilter
 				if hasDisabledFields {
@@ -519,6 +375,16 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		// todo dont count soft removed
 		appctx.Db.Raw().Model(&modelObj).Count(&totalItems)
 		pagesCount := math.Ceil(float64(totalItems) / float64(result.paging.PerPage))
+
+		// check sorting field
+		if listQueryParams.SortField != "" {
+			_, canBeSorted := modelDataStruct.Filterable[listQueryParams.SortField]
+
+			if !canBeSorted {
+				listQueryParams.SortField = ""
+			}
+
+		}
 
 		// todo add paging
 		SortAndFindAllWhere[T](appctx.Db,
@@ -806,5 +672,10 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		})
 	}
 
+	return result
+}
+
+func (result *CrudConfig[T, CtxType]) PerPage(val int) *CrudConfig[T, CtxType] {
+	result.paging.PerPage = val
 	return result
 }

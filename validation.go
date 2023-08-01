@@ -49,6 +49,8 @@ type FieldsMapping struct {
 
 	Fillable []string
 	Outable  []string
+
+	Filterable map[string]bool
 }
 
 // source : https://stackoverflow.com/questions/56616196/how-to-convert-camel-case-string-to-snake-case
@@ -82,6 +84,7 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 	objMapp.Fields = make(map[string]ApiTags)
 	objMapp.Outable = []string{}
 	objMapp.Fillable = []string{}
+	objMapp.Filterable = make(map[string]bool)
 
 	reflectedObject := reflect.ValueOf(obj)
 	_type := reflect.Indirect(reflectedObject).Type()
@@ -172,6 +175,7 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 
 		if !result.Internal && result.Outable {
 			objMapp.Outable = append(objMapp.Outable, declaredName)
+			objMapp.Filterable[defName] = true
 		}
 
 		objMapp.Fields[declaredName] = result
