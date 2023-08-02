@@ -5,6 +5,7 @@ import (
 
 	"github.com/dot5enko/typed"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 type BeforeCreateCbAware[CtxType any] interface {
@@ -180,6 +181,22 @@ func FindAllWhere[T any, CtxType any](db DbWrapper[CtxType], where string, where
 
 	if findErr != nil {
 		return typed.ResultFailed[[]T](findErr)
+	} else {
+		return typed.ResultOk(result)
+	}
+
+}
+
+func FindAndLockFirstWhere[T any, CtxType any](db DbWrapper[CtxType], where string, whereArgs ...any) typed.Result[T] {
+
+	var result T
+
+	findErr := db.Raw().Clauses(clause.Locking{
+		Strength: "UPDATE",
+	}).Where(where, whereArgs...).First(&result).Error
+
+	if findErr != nil {
+		return typed.ResultFailed[T](findErr)
 	} else {
 		return typed.ResultOk(result)
 	}
