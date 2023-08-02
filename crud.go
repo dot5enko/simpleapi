@@ -373,7 +373,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		totalItems := int64(0)
 		// todo dont count soft removed
-		appctx.Db.Raw().Model(&modelObj).Count(&totalItems)
+		appctx.Db.Raw().Model(&modelObj).Where(filters, filterArgs...).Count(&totalItems)
 		pagesCount := math.Ceil(float64(totalItems) / float64(result.paging.PerPage))
 
 		// check sorting field
