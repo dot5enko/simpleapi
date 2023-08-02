@@ -383,10 +383,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			if !canBeSorted {
 				listQueryParams.SortField = ""
 			}
-
 		}
 
-		// todo add paging
 		SortAndFindAllWhere[T](appctx.Db,
 			listQueryParams.SortField,
 			listQueryParams.SortOrder,

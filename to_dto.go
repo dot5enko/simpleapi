@@ -11,7 +11,29 @@ func ToDto[T any, CtxType any](it T, appctx *AppContext[CtxType], permission int
 	if m.OutExtraMethod {
 
 		dtoPresenter, _ := any(it).(ApiDto[CtxType])
-		return dtoPresenter.ToApiDto(rawDto, permission, appctx)
+
+		var result typed.Result[map[string]any]
+
+		var internalError error
+
+		func() {
+
+			defer func() {
+				rec := recover()
+				if rec != nil {
+					internalError = typed.PanickedError{Cause: rec}
+				}
+			}()
+
+			result = dtoPresenter.ToApiDto(rawDto, permission, appctx)
+		}()
+
+		if internalError != nil {
+			return typed.ResultFailed[map[string]any](internalError)
+		} else {
+			return result
+		}
+
 	} else {
 		return typed.ResultOk(rawDto)
 	}

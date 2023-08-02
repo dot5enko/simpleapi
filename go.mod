@@ -6,7 +6,7 @@ require (
 	github.com/gin-gonic/gin v1.9.0
 	github.com/google/uuid v1.3.0
 	github.com/tidwall/gjson v1.14.4
-	github.com/dot5enko/typed v1.0.3
+	github.com/dot5enko/typed v1.0.4
 	gorm.io/gorm v1.25.0
 )
 
