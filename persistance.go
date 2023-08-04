@@ -52,9 +52,9 @@ func _isolatedCreate[CtxType any](obj any, ctx AppContext[CtxType]) (err error) 
 
 	_db := ctx.Db.Raw()
 
-	__obj, ok := obj.(BeforeCreateCbAware[CtxType])
+	__obj, ok := obj.(OnBeforeUpdateCbAware[CtxType])
 	if ok {
-		beforeUpdateCbErr := __obj.BeforeCreate(&ctx)
+		beforeUpdateCbErr := __obj.BeforeUpdate(&ctx)
 		if beforeUpdateCbErr != nil {
 			return beforeUpdateCbErr
 		}
