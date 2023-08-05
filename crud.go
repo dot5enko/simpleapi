@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
@@ -368,13 +369,18 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			curPage = 1
 		}
 
-		limitVal := result.paging.PerPage
-		offsetVal := (curPage - 1) * result.paging.PerPage
+		perPageVal, perPageErr := strconv.ParseInt(ctx.Query("per_page"), 10, 64)
+		if perPageErr != nil || perPageVal <= 0 {
+			perPageVal = int64(result.paging.PerPage)
+		}
+
+		limitVal := int(perPageVal)
+		offsetVal := (curPage - 1) * int(perPageVal)
 
 		totalItems := int64(0)
 		// todo dont count soft removed
 		appctx.Db.Raw().Model(&modelObj).Where(filters, filterArgs...).Count(&totalItems)
-		pagesCount := math.Ceil(float64(totalItems) / float64(result.paging.PerPage))
+		pagesCount := math.Ceil(float64(totalItems) / float64(perPageVal))
 
 		// check sorting field
 		if listQueryParams.SortField != "" {
