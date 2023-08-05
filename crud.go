@@ -413,7 +413,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 					unwrapped := _dtoResult.Unwrap()
 					dtos = append(dtos, unwrapped)
 				} else {
-					log.Printf("unable to convert object to api dto : %s", _dtoResult.UnwrapError().Error())
+					log.Printf("unable to convert object(%#+v) to api dto : %s", it, _dtoResult.UnwrapError().Error())
 				}
 			}
 
