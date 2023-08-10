@@ -345,7 +345,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		ctx.BindQuery(&listQueryParams)
 
 		modelDataStruct := appctx.ApiData(modelObj)
-
 		userAuthData := result.RequestData(ctx, appctx)
 
 		// filters
@@ -476,7 +475,64 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	existingItems := group.Group("/:id")
 	existingItems.Use(func(ctx *gin.Context) {
 
+		var modelObj T
+		modelInfo := appctx.ApiData(modelObj)
+
+		reqData := result.RequestData(ctx, appctx)
+
+		idParam := ctx.Param("id")
+
+		filter := map[string]any{
+			result.objectIdField: idParam,
+		}
+
+		// todo move to compile time
+		// eg generate Use(...) without ifs
+		if modelInfo.UserReferenceField.Has && !reqData.IsAdmin {
+
+			userId := reqData.AuthorizedUserId
+
+			if userId == nil {
+				ctx.AbortWithStatusJSON(404, gin.H{
+					"msg": "item not f0und",
+				})
+				return
+			} else {
+
+				// put user reference into filter
+				filter[modelInfo.UserReferenceField.TableColumnName] = userId
+			}
+		}
+
+		// build filters
+		// todo cache query
+
+		filterArgs := []any{}
+		filterEntries := []string{}
+
+		for fName, fVal := range filter {
+			filterEntries = append(filterEntries, fmt.Sprintf("%s = ?", fName))
+			filterArgs = append(filterArgs, fVal)
+		}
+		filterStr := strings.Join(filterEntries, " AND ")
+
+		findResult := FindFirstWhere[T](appctx.Db, filterStr, filterArgs...)
+
+		if !findResult.IsOk() {
+
+			findErr := findResult.UnwrapError()
+
+			ctx.AbortWithStatusJSON(404, gin.H{
+				"msg": "object not found",
+				"err": findErr,
+			})
+		} else {
+			modelCopy := findResult.Unwrap()
+			ctx.Set("_eobj", modelCopy)
+		}
+
 		// todo do in compile time
+		// todo remove
 		if result.passObject || result.relTypeTable != "" {
 			stored := storeObjectInContext[T](appctx, ctx)
 
@@ -536,130 +592,101 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		var modelCopy T
 
-		idParam := ctx.Param("id")
-		// todo cache
-		q := fmt.Sprintf("%s = ?", result.objectIdField)
+		model, _ := ctx.Get("_eobj")
+		modelCopy = model.(T)
 
-		findResult := FindFirstWhere[T](appctx.Db, q, idParam)
+		data, err := ctx.GetRawData()
 
-		if !findResult.IsOk() {
-
-			findErr := findResult.UnwrapError()
-
-			ctx.JSON(404, gin.H{
-				"msg": "object not found",
-				"err": findErr,
+		if err != nil {
+			ctx.JSON(500, gin.H{
+				"msg": "unable to get object data, when creating new one",
+				"err": err.Error(),
 			})
-		} else {
+			return
+		}
+		parsed := gjson.ParseBytes(data)
 
-			modelCopy = findResult.Unwrap()
+		if !parsed.Exists() {
+			ctx.JSON(500, gin.H{
+				"msg": "unable to decode obhect info",
+				"raw": string(data),
+			})
+			return
+		}
 
-			data, err := ctx.GetRawData()
-			if err != nil {
-				ctx.JSON(500, gin.H{
-					"msg": "unable to get object data, when creating new one",
-					"err": err.Error(),
-				})
-				return
-			}
-			parsed := gjson.ParseBytes(data)
+		reqData := result.RequestData(ctx, appctx)
 
-			if !parsed.Exists() {
-				ctx.JSON(500, gin.H{
-					"msg": "unable to decode obhect info",
-					"raw": string(data),
-				})
-				return
-			}
+		anotherCopy := modelCopy
+		ref := &anotherCopy
 
-			reqData := result.RequestData(ctx, appctx)
+		fillError := appctx.FillEntityFromDto(ref, parsed, nil)
 
-			anotherCopy := modelCopy
-			ref := &anotherCopy
+		if fillError != nil {
+			ctx.JSON(500, gin.H{
+				"msg": "fill object fields erorr",
+				"err": fillError.Error(),
+			})
+			return
+		}
 
-			fillError := appctx.FillEntityFromDto(ref, parsed, nil)
+		saveError := appctx.Db.Raw().Transaction(func(tx *gorm.DB) error {
 
-			if fillError != nil {
-				ctx.JSON(500, gin.H{
-					"msg": "fill object fields erorr",
-					"err": fillError.Error(),
-				})
-				return
-			}
+			isolatedContext := appctx.isolateDatabase(tx)
+			isolatedContext.Request = ctx
 
-			saveError := appctx.Db.Raw().Transaction(func(tx *gorm.DB) error {
+			saveErr := appctx.Db.Save(&anotherCopy)
 
-				isolatedContext := appctx.isolateDatabase(tx)
-				isolatedContext.Request = ctx
+			if saveErr == nil {
 
-				saveErr := appctx.Db.Save(&anotherCopy)
+				fieldsData := appctx.ApiData(ref)
 
-				if saveErr == nil {
+				if fieldsData.UpdateExtraMethod {
+					// get updater
 
-					fieldsData := appctx.ApiData(ref)
+					log.Printf("model(%s) has an update event handler", fieldsData.TypeName)
 
-					if fieldsData.UpdateExtraMethod {
-						// get updater
-
-						log.Printf("model(%s) has an update event handler", fieldsData.TypeName)
-
-						objUpdater, _ := any(ref).(OnUpdateEventHandler[CtxType, T])
-						updateEventError := objUpdater.OnUpdate(appctx, modelCopy, *ref)
-						if updateEventError != nil {
-							return updateEventError
-						}
+					objUpdater, _ := any(ref).(OnUpdateEventHandler[CtxType, T])
+					updateEventError := objUpdater.OnUpdate(appctx, modelCopy, *ref)
+					if updateEventError != nil {
+						return updateEventError
 					}
 				}
-
-				return saveErr
-			})
-
-			if saveError != nil {
-				ctx.JSON(404, gin.H{
-					"msg": "unable to update object",
-					"err": saveError.Error(),
-				})
-			} else {
-				ctx.JSON(200, gin.H{
-					"item": ToDto(modelCopy, appctx, reqData).Unwrap(),
-				})
 			}
+
+			return saveErr
+		})
+
+		if saveError != nil {
+			ctx.JSON(404, gin.H{
+				"msg": "unable to update object",
+				"err": saveError.Error(),
+			})
+		} else {
+			ctx.JSON(200, gin.H{
+				"item": ToDto(modelCopy, appctx, reqData).Unwrap(),
+			})
 		}
 
 	})
 
 	existingItems.DELETE("", writePermissionMiddleware, func(ctx *gin.Context) {
 
-		idParam := ctx.Param("id")
+		var modelCopy T
 
-		q := fmt.Sprintf("%s = ?", result.objectIdField)
+		model, _ := ctx.Get("_eobj")
+		modelCopy = model.(T)
 
-		findResult := FindFirstWhere[T](appctx.Db, q, idParam)
-
-		if !findResult.IsOk() {
-
-			findErr := findResult.UnwrapError()
-
-			ctx.JSON(404, gin.H{
-				"msg": "object not found",
-				"err": findErr.Error(),
+		deleteError := appctx.Db.Delete(&modelCopy)
+		if deleteError != nil {
+			ctx.JSON(500, gin.H{
+				"msg": "unable to remove",
+				"err": deleteError.Error(),
 			})
+			return
 		} else {
-
-			model = findResult.Unwrap()
-
-			deleteError := appctx.Db.Delete(&model)
-			if deleteError != nil {
-				ctx.JSON(500, gin.H{
-					"msg": "unable to remove",
-					"err": deleteError.Error(),
-				})
-				return
-			} else {
-				ctx.JSON(200, gin.H{
-					"ok": true,
-				})
-			}
+			ctx.JSON(200, gin.H{
+				"ok": true,
+			})
 		}
 
 	})
@@ -670,36 +697,21 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		start := time.Now()
 
-		idParam := ctx.Param("id")
-		modelCopy := model
+		var modelCopy T
 
-		q := fmt.Sprintf("%s = ?", result.objectIdField)
+		model, _ := ctx.Get("_eobj")
+		modelCopy = model.(T)
 
-		findResult := FindFirstWhere[T](appctx.Db, q, idParam)
+		// todo get role
 
-		// todo validate
-		errFirst := findResult.UnwrapError()
+		dur := time.Since(start)
+		durFloat := float64(dur.Nanoseconds()) / 1e6
 
-		if errFirst != nil {
-			ctx.JSON(404, gin.H{
-				"msg": "object not found, ",
-				"err": errFirst.Error(),
-			})
-		} else {
+		ctx.Writer.Header().Add("Server-Timing", fmt.Sprintf("miss, app;dur=%.2f", durFloat))
 
-			modelCopy = findResult.Unwrap()
-
-			// todo get role
-
-			dur := time.Since(start)
-			durFloat := float64(dur.Nanoseconds()) / 1e6
-
-			ctx.Writer.Header().Add("Server-Timing", fmt.Sprintf("miss, app;dur=%.2f", durFloat))
-
-			ctx.JSON(200, gin.H{
-				"item": ToDto(modelCopy, appctx, reqData).Unwrap(),
-			})
-		}
+		ctx.JSON(200, gin.H{
+			"item": ToDto(modelCopy, appctx, reqData).Unwrap(),
+		})
 	})
 
 	for _, relatedItem := range result.hasMultiple {
