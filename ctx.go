@@ -21,15 +21,27 @@ func NewAppContext[T any](ctx *T) *AppContext[T] {
 	return app
 }
 
+type RequestData struct {
+	IsAdmin          bool
+	RoleGroup        uint8
+	AuthorizedUserId any // todo use generic type
+}
+
 type AppContext[T any] struct {
 	Data    *T
 	Request *gin.Context
 
 	Db DbWrapper[T]
 
+	AppRequest RequestData
+
 	objects map[string]FieldsMapping
 
 	isolated bool
+}
+
+func (actx *AppContext[T]) SetObjectsMapping(omap map[string]FieldsMapping) {
+	actx.objects = omap
 }
 
 func (actx AppContext[T]) ApiData(object any) FieldsMapping {

@@ -3,8 +3,9 @@ package simpleapi
 import "github.com/gin-gonic/gin"
 
 type CrudGroup[T any] struct {
-	Ctx    AppContext[T]
-	Config CrudGroupConfig[T]
+	Ctx                  AppContext[T]
+	Config               CrudGroupConfig[T]
+	RequestDataGenerator func(g *gin.Context, ctx *AppContext[T]) RequestData
 }
 
 type HasPermissionChecker[T any] func(req *gin.Context, ctx *AppContext[T]) bool

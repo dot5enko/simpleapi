@@ -2,11 +2,11 @@ package simpleapi
 
 import "github.com/dot5enko/typed"
 
-func ToDto[T any, CtxType any](it T, appctx *AppContext[CtxType], permission int) typed.Result[map[string]any] {
+func ToDto[T any, CtxType any](it T, appctx *AppContext[CtxType], req RequestData) typed.Result[map[string]any] {
 
 	m := appctx.ApiData(it)
 
-	rawDto := m.ToDto(it)
+	rawDto := m.ToDto(it, req)
 
 	if m.OutExtraMethod {
 
@@ -25,7 +25,7 @@ func ToDto[T any, CtxType any](it T, appctx *AppContext[CtxType], permission int
 				}
 			}()
 
-			result = dtoPresenter.ToApiDto(rawDto, permission, appctx)
+			result = dtoPresenter.ToApiDto(rawDto, req, appctx)
 		}()
 
 		if internalError != nil {

@@ -65,6 +65,10 @@ type PagingConfig struct {
 	PerPage int
 }
 
+func (it *CrudConfig[T, CtxType]) RequestData(g *gin.Context, ctx *AppContext[CtxType]) RequestData {
+	return it.CrudGroup.RequestDataGenerator(g, ctx)
+}
+
 func (it *CrudConfig[T, CtxType]) IdField(fieldName string) *CrudConfig[T, CtxType] {
 
 	it.objectIdField = fieldName
@@ -95,7 +99,7 @@ func (it *CrudConfig[T, CtxType]) OnObjectCreate(h func(crudContext CrudContext[
 	return it
 }
 
-type RelatedObjectHandlerInit[T any, CtxType any] func(appctx *AppContext[CtxType], config *ApiObjectRelation[T, CtxType])
+type RelatedObjectHandlerInit[T any, CtxType any] func(appctx *AppContext[CtxType], config *ApiObjectRelation[T, CtxType], req RequestData)
 
 type ApiObjectRelation[RelatedToType any, CtxType any] struct {
 	PathSuffix          string
@@ -299,9 +303,11 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			return
 		}
 
+		reqData := result.RequestData(ctx, appctx)
+
 		ctx.JSON(200, gin.H{
 			"created": true,
-			"object":  ToDto(modelCopy, appctx, 0).Unwrap(),
+			"object":  ToDto(modelCopy, appctx, reqData).Unwrap(),
 		})
 	})
 
@@ -366,6 +372,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		// should be auth check instead
 
+		reqData := result.RequestData(ctx, appctx)
+
 		curPage := listQueryParams.Page
 		if curPage <= 0 {
 			curPage = 1
@@ -410,7 +418,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 				// check if item has dto converter
 				// todo pass permission value
-				_dtoResult := ToDto(it, appctx, 0)
+				_dtoResult := ToDto(it, appctx, reqData)
 				if _dtoResult.IsOk() {
 					unwrapped := _dtoResult.Unwrap()
 					dtos = append(dtos, unwrapped)
@@ -535,6 +543,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				return
 			}
 
+			reqData := result.RequestData(ctx, appctx)
+
 			anotherCopy := modelCopy
 			ref := &anotherCopy
 
@@ -582,7 +592,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				})
 			} else {
 				ctx.JSON(200, gin.H{
-					"item": ToDto(modelCopy, appctx, 0).Unwrap(),
+					"item": ToDto(modelCopy, appctx, reqData).Unwrap(),
 				})
 			}
 		}
@@ -627,6 +637,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 	existingItems.GET("", func(ctx *gin.Context) {
 
+		reqData := result.RequestData(ctx, appctx)
+
 		start := time.Now()
 
 		idParam := ctx.Param("id")
@@ -656,7 +668,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			ctx.Writer.Header().Add("Server-Timing", fmt.Sprintf("miss, app;dur=%.2f", durFloat))
 
 			ctx.JSON(200, gin.H{
-				"item": ToDto(modelCopy, appctx, 0).Unwrap(),
+				"item": ToDto(modelCopy, appctx, reqData).Unwrap(),
 			})
 		}
 	})
@@ -673,7 +685,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				Request: ctx,
 			}
 
-			cur.ItemHandler(isolated, &cur)
+			cur.ItemHandler(isolated, &cur, result.RequestData(ctx, appctx))
 
 		})
 	}

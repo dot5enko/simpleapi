@@ -33,6 +33,7 @@ type ApiTags struct {
 	Internal bool
 
 	UserIdFlag bool // indicates that this field is substitued with authenticated user id on filter
+	AdminOnly  bool
 
 	FillName *string
 }
@@ -186,9 +187,8 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 
 		// check field flags
 
-		_, UserIdFlag := flagsMap["userid"]
-
-		result.UserIdFlag = UserIdFlag
+		_, result.UserIdFlag = flagsMap["userid"]
+		_, result.AdminOnly = flagsMap["adminonly"]
 
 		if !result.Internal && result.Fillable {
 			objMapp.Fillable = append(objMapp.Fillable, declaredName)
@@ -210,7 +210,7 @@ func GetObjectType(obj any) string {
 	return tobj.PkgPath() + "." + tobj.Name()
 }
 
-func (m FieldsMapping) ToDto(obj any) map[string]any {
+func (m FieldsMapping) ToDto(obj any, req RequestData) map[string]any {
 
 	result := map[string]any{}
 
@@ -230,6 +230,10 @@ func (m FieldsMapping) ToDto(obj any) map[string]any {
 			fieldInfo := m.Fields[fieldName]
 
 			ivalue := reflected.FieldByName(fieldName).Interface()
+
+			if fieldInfo.AdminOnly && !req.IsAdmin {
+				return
+			}
 
 			var val any = ivalue
 

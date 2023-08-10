@@ -9,7 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func RelatedItemHandlerImpl[OfType any, CtxType any, RelatedType any](appctx *AppContext[CtxType], idGetter RelatedObjectIdGetter[OfType], parentIdField, apiPath string, idFieldName string) {
+func RelatedItemHandlerImpl[OfType any, CtxType any, RelatedType any](appctx *AppContext[CtxType], idGetter RelatedObjectIdGetter[OfType], parentIdField, apiPath string, idFieldName string, req RequestData) {
 
 	ctx := appctx.Request
 
@@ -89,7 +89,7 @@ func RelatedItemHandlerImpl[OfType any, CtxType any, RelatedType any](appctx *Ap
 				// }
 
 				for _, it := range outItems {
-					morphed = append(morphed, ToDto(it, appctx, 0).Unwrap())
+					morphed = append(morphed, ToDto(it, appctx, req).Unwrap())
 				}
 
 				ctx.JSON(200, gin.H{
@@ -101,12 +101,28 @@ func RelatedItemHandlerImpl[OfType any, CtxType any, RelatedType any](appctx *Ap
 
 }
 
-func RelatedModels[Related any, CtxType any, OfType any](groupConfig *CrudGroup[CtxType], pathSuffix, childIdField string, idgetter RelatedObjectIdGetter[OfType]) ApiObjectRelation[OfType, CtxType] {
+func RelatedModels[Related any, CtxType any, OfType any](
+	groupConfig *CrudGroup[CtxType],
+	pathSuffix, childIdField string,
+	idgetter RelatedObjectIdGetter[OfType],
+) ApiObjectRelation[OfType, CtxType] {
+
 	return ApiObjectRelation[OfType, CtxType]{
 		ParentObjectIdField: childIdField,
 		PathSuffix:          pathSuffix,
-		ItemHandler: func(appctx *AppContext[CtxType], that *ApiObjectRelation[OfType, CtxType]) {
-			RelatedItemHandlerImpl[OfType, CtxType, Related](appctx, idgetter, that.ParentObjectIdField, that.PathSuffix, groupConfig.Config.ObjectIdFieldName)
+		ItemHandler: func(
+			appctx *AppContext[CtxType],
+			that *ApiObjectRelation[OfType, CtxType],
+			req RequestData,
+		) {
+			RelatedItemHandlerImpl[OfType, CtxType, Related](
+				appctx,
+				idgetter,
+				that.ParentObjectIdField,
+				that.PathSuffix,
+				groupConfig.Config.ObjectIdFieldName,
+				req,
+			)
 		},
 	}
 }
