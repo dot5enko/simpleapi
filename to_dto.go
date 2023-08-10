@@ -4,7 +4,7 @@ import "github.com/dot5enko/typed"
 
 func ToDto[T any, CtxType any](it T, appctx *AppContext[CtxType], permission int) typed.Result[map[string]any] {
 
-	m := appctx.Db.ApiData(it)
+	m := appctx.ApiData(it)
 
 	rawDto := m.ToDto(it)
 

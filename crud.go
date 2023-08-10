@@ -329,7 +329,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		listQueryParams := ListQueryParams{}
 		ctx.BindQuery(&listQueryParams)
 
-		modelDataStruct := appctx.Db.ApiData(modelObj)
+		modelDataStruct := appctx.ApiData(modelObj)
 
 		// filters
 		// todo make it secure!
@@ -557,7 +557,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 				if saveErr == nil {
 
-					fieldsData := appctx.Db.ApiData(ref)
+					fieldsData := appctx.ApiData(ref)
 
 					if fieldsData.UpdateExtraMethod {
 						// get updater

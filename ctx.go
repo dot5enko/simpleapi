@@ -32,6 +32,17 @@ type AppContext[T any] struct {
 	isolated bool
 }
 
+func (actx AppContext[T]) ApiData(object any) FieldsMapping {
+	objTypeName := GetObjectType(object)
+	rules, ok := actx.objects[objTypeName]
+
+	if !ok {
+		panic(fmt.Sprintf("trying to get api info for type (%s) that is not a valid registered object within project. try calling .Migrate() first", objTypeName))
+	} else {
+		return rules
+	}
+}
+
 var (
 	ErrNumberOverflow = fmt.Errorf("field value overflows type")
 )
@@ -42,7 +53,7 @@ func (c AppContext[T]) RegisteredTypes() map[string]FieldsMapping {
 
 func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *FillFromDtoOptions) (err error) {
 
-	m := c.Db.ApiData(obj)
+	m := c.ApiData(obj)
 
 	reflected := reflect.Indirect(reflect.ValueOf(obj))
 
@@ -187,17 +198,6 @@ func (c DbWrapper[T]) Migrate(object any) {
 	el := GetFieldTags[T, any](object)
 	el.TypeName = objTypeName
 	c.app.objects[objTypeName] = el
-}
-
-func (c DbWrapper[T]) ApiData(object any) FieldsMapping {
-	objTypeName := GetObjectType(object)
-	rules, ok := c.app.objects[objTypeName]
-
-	if !ok {
-		panic(fmt.Sprintf("trying to get api info for type (%s) that is not a valid registered object within project. try calling .Migrate() first", objTypeName))
-	} else {
-		return rules
-	}
 }
 
 func (c AppContext[T]) isolateDatabase(isolatedDb *gorm.DB) AppContext[T] {
