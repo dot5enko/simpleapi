@@ -248,7 +248,9 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		// default fill from model tags
 		parsedJson := gjson.ParseBytes(data)
 
-		fillError := appctx.FillEntityFromDto(&modelCopy, parsedJson, nil)
+		req := result.RequestData(ctx, appctx)
+
+		fillError := appctx.FillEntityFromDto(&modelCopy, parsedJson, nil, req)
 
 		if fillError != nil {
 			ctx.JSON(500, gin.H{
@@ -633,7 +635,9 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		anotherCopy := modelCopy
 		ref := &anotherCopy
 
-		fillError := appctx.FillEntityFromDto(ref, parsed, nil)
+		req := result.RequestData(ctx, appctx)
+
+		fillError := appctx.FillEntityFromDto(ref, parsed, nil, req)
 
 		if fillError != nil {
 			ctx.JSON(500, gin.H{

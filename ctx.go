@@ -63,7 +63,7 @@ func (c AppContext[T]) RegisteredTypes() map[string]FieldsMapping {
 	return c.objects
 }
 
-func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *FillFromDtoOptions) (err error) {
+func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *FillFromDtoOptions, req RequestData) (err error) {
 
 	m := c.ApiData(obj)
 
@@ -107,6 +107,12 @@ func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *Fil
 			// 	br = true
 			// 	return
 			// }
+
+			// todo optimize
+			// make groups inheritance, etc
+			if fieldInfo.WriteRole != uint64(req.RoleGroup) {
+				return
+			}
 
 			var dtoData any
 

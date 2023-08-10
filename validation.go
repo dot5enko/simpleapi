@@ -3,6 +3,7 @@ package simpleapi
 import (
 	"log"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -26,7 +27,8 @@ type ApiTags struct {
 	TypeKind reflect.Kind
 	Typ      string
 
-	Role *string
+	WriteRole uint64
+	ReadRole  uint64
 
 	Fillable bool
 	Outable  bool
@@ -178,7 +180,13 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 
 		role, hasRole := fieldData.Tag.Lookup("role")
 		if hasRole {
-			result.Role = &role
+			roles := strings.Split(role, ",")
+
+			result.WriteRole, _ = strconv.ParseUint(strings.TrimSpace(roles[0]), 10, 64)
+
+			if len(roles) > 1 {
+				result.ReadRole, _ = strconv.ParseUint(strings.TrimSpace(roles[1]), 10, 64)
+			}
 		}
 
 		// log.Printf(" --- field `%s`: tags : %#+v", fieldData.Name, tag)
