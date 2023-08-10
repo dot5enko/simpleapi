@@ -38,6 +38,8 @@ type CrudConfig[T any, CtxType any] struct {
 	App         *AppContext[CtxType]
 	CrudGroup   *CrudGroup[CtxType]
 
+	requestDataGeneratorOverride func(g *gin.Context, ctx *AppContext[CtxType]) RequestData
+
 	existing     []gin.HandlerFunc
 	beforeCreate []gin.HandlerFunc
 
@@ -67,6 +69,11 @@ type PagingConfig struct {
 }
 
 func (it *CrudConfig[T, CtxType]) RequestData(g *gin.Context, ctx *AppContext[CtxType]) RequestData {
+
+	if it.requestDataGeneratorOverride != nil {
+		return it.requestDataGeneratorOverride(g, ctx)
+	}
+
 	if it.CrudGroup.Config.RequestDataGenerator == nil {
 		return RequestData{
 			IsAdmin:          false,
@@ -81,6 +88,13 @@ func (it *CrudConfig[T, CtxType]) RequestData(g *gin.Context, ctx *AppContext[Ct
 func (it *CrudConfig[T, CtxType]) IdField(fieldName string) *CrudConfig[T, CtxType] {
 
 	it.objectIdField = fieldName
+
+	return it
+}
+
+func (it *CrudConfig[T, CtxType]) AdminCheck(init func(g *gin.Context, ctx *AppContext[CtxType]) RequestData) *CrudConfig[T, CtxType] {
+
+	it.requestDataGeneratorOverride = init
 
 	return it
 }
