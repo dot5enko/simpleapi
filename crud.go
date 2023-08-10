@@ -54,6 +54,7 @@ type CrudConfig[T any, CtxType any] struct {
 
 	passObject bool
 
+	// not used ?
 	disableFilterOverFields map[string]bool
 
 	objectIdField string
@@ -345,8 +346,9 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		modelDataStruct := appctx.ApiData(modelObj)
 
+		userAuthData := result.RequestData(ctx, appctx)
+
 		// filters
-		// todo make it secure!
 		{
 			parts := []string{}
 
@@ -354,13 +356,34 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			filtersMap := map[string]any{}
 			json.Unmarshal([]byte(ctx.Query("filter")), &filtersMap)
 
+			// override user related fields to current auth user if its not an admin
+			// todo make it type safe through generics
+			// each table/entity should have it own type for id ?
+			if modelDataStruct.UserReferenceField.Has && !userAuthData.IsAdmin {
+				authId := userAuthData.AuthorizedUserId
+
+				if authId == nil {
+					ctx.JSON(200, gin.H{
+						"items":       []any{},
+						"pages":       0,
+						"total_items": 0,
+						"msg":         "no access",
+					})
+					return
+				} else {
+					filtersMap[modelDataStruct.UserReferenceField.TableColumnName] = userAuthData.AuthorizedUserId
+				}
+			}
+
 			for filterFieldName, filterValue := range filtersMap {
 
 				// allow only whitelisted fields
-				_, canBeFiltered := modelDataStruct.Filterable[filterFieldName]
+				if !userAuthData.IsAdmin {
+					_, canBeFiltered := modelDataStruct.Filterable[filterFieldName]
 
-				if !canBeFiltered {
-					continue
+					if !canBeFiltered {
+						continue
+					}
 				}
 
 				// if result.CrudGroup.Config.DisableFilter
@@ -377,8 +400,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 			filters = strings.Join(parts, " AND ")
 		}
-
-		// should be auth check instead
 
 		reqData := result.RequestData(ctx, appctx)
 

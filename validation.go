@@ -40,6 +40,13 @@ type ApiTags struct {
 
 type OnUpdateExecutor[T any] func(prev T, cur T)
 
+type UserReferenceInfo struct {
+	Has bool
+
+	DeclName        string
+	TableColumnName string
+}
+
 type FieldsMapping struct {
 	TypeName string
 
@@ -55,6 +62,8 @@ type FieldsMapping struct {
 	AdminOnly []string
 
 	Filterable map[string]bool
+
+	UserReferenceField UserReferenceInfo
 }
 
 // source : https://stackoverflow.com/questions/56616196/how-to-convert-camel-case-string-to-snake-case
@@ -189,6 +198,14 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 
 		_, result.UserIdFlag = flagsMap["userid"]
 		_, result.AdminOnly = flagsMap["adminonly"]
+
+		if result.UserIdFlag {
+			objMapp.UserReferenceField = UserReferenceInfo{
+				Has:             true,
+				DeclName:        declaredName,
+				TableColumnName: defName,
+			}
+		}
 
 		if !result.Internal && result.Fillable {
 			objMapp.Fillable = append(objMapp.Fillable, declaredName)
