@@ -67,14 +67,14 @@ type PagingConfig struct {
 }
 
 func (it *CrudConfig[T, CtxType]) RequestData(g *gin.Context, ctx *AppContext[CtxType]) RequestData {
-	if it.CrudGroup.RequestDataGenerator == nil {
+	if it.CrudGroup.Config.RequestDataGenerator == nil {
 		return RequestData{
 			IsAdmin:          false,
 			RoleGroup:        0,
 			AuthorizedUserId: nil,
 		}
 	} else {
-		return it.CrudGroup.RequestDataGenerator(g, ctx)
+		return it.CrudGroup.Config.RequestDataGenerator(g, ctx)
 	}
 }
 
