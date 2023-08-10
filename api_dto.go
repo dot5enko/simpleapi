@@ -6,6 +6,7 @@ import (
 )
 
 // allows to include any additional data with default data
+// TODO remove result map, change input map by reference
 type ApiDto[CtxType any] interface {
 	ToApiDto(data map[string]any, permission int, ctx *AppContext[CtxType]) typed.Result[map[string]any]
 }

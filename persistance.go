@@ -94,6 +94,7 @@ func _isolatedSave[CtxType any](obj any, ctx AppContext[CtxType]) (err error) {
 	}
 
 	// check after event
+	// should be executed after transaction commit
 	_obj, ok := obj.(OnAfterUpdateCbAware[CtxType])
 	if ok {
 		return _obj.AfterUpdate(&ctx)

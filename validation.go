@@ -32,6 +32,8 @@ type ApiTags struct {
 	Outable  bool
 	Internal bool
 
+	UserIdFlag bool // indicates that this field is substitued with authenticated user id on filter
+
 	FillName *string
 }
 
@@ -47,8 +49,9 @@ type FieldsMapping struct {
 
 	UpdateExtraMethod bool
 
-	Fillable []string
-	Outable  []string
+	Fillable  []string
+	Outable   []string
+	AdminOnly []string
 
 	Filterable map[string]bool
 }
@@ -85,6 +88,7 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 	objMapp.Outable = []string{}
 	objMapp.Fillable = []string{}
 	objMapp.Filterable = make(map[string]bool)
+	objMapp.AdminOnly = []string{}
 
 	reflectedObject := reflect.ValueOf(obj)
 	_type := reflect.Indirect(reflectedObject).Type()
@@ -168,6 +172,23 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 		}
 
 		// log.Printf(" --- field `%s`: tags : %#+v", fieldData.Name, tag)
+
+		spl, hasSimpleapi := fieldData.Tag.Lookup("simpleapi")
+		flagsMap := map[string]bool{}
+
+		if hasSimpleapi {
+			fieldFlags := strings.Split(spl, ",")
+
+			for _, it := range fieldFlags {
+				flagsMap[strings.TrimSpace(it)] = true
+			}
+		}
+
+		// check field flags
+
+		_, UserIdFlag := flagsMap["userid"]
+
+		result.UserIdFlag = UserIdFlag
 
 		if !result.Internal && result.Fillable {
 			objMapp.Fillable = append(objMapp.Fillable, declaredName)
