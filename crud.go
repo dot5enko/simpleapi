@@ -66,7 +66,15 @@ type PagingConfig struct {
 }
 
 func (it *CrudConfig[T, CtxType]) RequestData(g *gin.Context, ctx *AppContext[CtxType]) RequestData {
-	return it.CrudGroup.RequestDataGenerator(g, ctx)
+	if it.CrudGroup.RequestDataGenerator == nil {
+		return RequestData{
+			IsAdmin:          false,
+			RoleGroup:        0,
+			AuthorizedUserId: nil,
+		}
+	} else {
+		return it.CrudGroup.RequestDataGenerator(g, ctx)
+	}
 }
 
 func (it *CrudConfig[T, CtxType]) IdField(fieldName string) *CrudConfig[T, CtxType] {
