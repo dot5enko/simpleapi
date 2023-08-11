@@ -117,7 +117,7 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 		_, additionalOnUpdate := obj.(OnUpdateEventHandler[CtxType, T])
 		objMapp.UpdateExtraMethod = additionalOnUpdate
 
-		log.Printf(" -- type %s : extra out : %v, extra fill : %v. onupdate : %v", _type.Name(), additionalDto, additionalFill, additionalOnUpdate)
+		// log.Printf(" -- type %s : extra out : %v, extra fill : %v. onupdate : %v", _type.Name(), additionalDto, additionalFill, additionalOnUpdate)
 	}
 
 	for i := 0; i < fields_count; i++ {
