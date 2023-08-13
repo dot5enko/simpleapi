@@ -200,16 +200,16 @@ type FilterOperationHandler func(fname string, decl map[string]any) (string, any
 
 var supportedFilters = map[string]FilterOperationHandler{
 	"gt": func(fname string, decl map[string]any) (string, any) {
-		return fmt.Sprintf("%s > ?"), decl["v"]
+		return fmt.Sprintf("%s > ?", fname), decl["v"]
 	},
 	"lt": func(fname string, decl map[string]any) (string, any) {
-		return fmt.Sprintf("%s < ?"), decl["v"]
+		return fmt.Sprintf("%s < ?", fname), decl["v"]
 	},
 	"gte": func(fname string, decl map[string]any) (string, any) {
-		return fmt.Sprintf("%s >= ?"), decl["v"]
+		return fmt.Sprintf("%s >= ?", fname), decl["v"]
 	},
 	"lte": func(fname string, decl map[string]any) (string, any) {
-		return fmt.Sprintf("%s <= ?"), decl["v"]
+		return fmt.Sprintf("%s <= ?", fname), decl["v"]
 	},
 }
 
