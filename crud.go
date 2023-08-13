@@ -12,6 +12,7 @@ import (
 
 	"github.com/dot5enko/typed"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
 	"gorm.io/gorm"
 )
@@ -191,6 +192,29 @@ func New[T any, CtxType any](crudGroup *CrudGroup[CtxType], group *gin.RouterGro
 	// todo recover in userland hooks
 
 	return &result
+}
+
+type FilterOperationHandler func(fname string, decl map[string]any) (string, any)
+
+// return "", decl["v"]
+
+var supportedFilters = map[string]FilterOperationHandler{
+	"gt": func(fname string, decl map[string]any) (string, any) {
+		return fmt.Sprintf("%s > ?"), decl["v"]
+	},
+	"lt": func(fname string, decl map[string]any) (string, any) {
+		return fmt.Sprintf("%s < ?"), decl["v"]
+	},
+	"gte": func(fname string, decl map[string]any) (string, any) {
+		return fmt.Sprintf("%s >= ?"), decl["v"]
+	},
+	"lte": func(fname string, decl map[string]any) (string, any) {
+		return fmt.Sprintf("%s <= ?"), decl["v"]
+	},
+}
+
+func SetListFilterHandler(fname string, h FilterOperationHandler) {
+	supportedFilters[fname] = h
 }
 
 func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
@@ -409,8 +433,31 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 					}
 				}
 
-				parts = append(parts, fmt.Sprintf("%s = ?", filterFieldName))
-				filterArgs = append(filterArgs, filterValue)
+				mapVal, isMap := filterValue.(map[string]any)
+
+				if isMap {
+
+					opName, ok := mapVal["op"].(string)
+
+					if ok {
+						filterGenerator, supported := supportedFilters[opName]
+
+						if supported {
+
+							fQueryCond, argVal := filterGenerator(filterFieldName, mapVal)
+
+							parts = append(parts, fQueryCond)
+							filterArgs = append(filterArgs, argVal)
+						}
+					}
+				} else {
+
+					// todo validate type
+					// expose type processor same as supported filters
+
+					parts = append(parts, fmt.Sprintf("%s = ?", filterFieldName))
+					filterArgs = append(filterArgs, filterValue)
+				}
 			}
 
 			filters = strings.Join(parts, " AND ")
@@ -479,9 +526,14 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 			return nil
 		}).Fail(func(e error) {
+
+			eId := uuid.NewString()
+
+			log.Printf("db err : %s: %s", eId, e.Error())
+
 			ctx.AbortWithStatusJSON(404, gin.H{
 				"msg": "db err",
-				"err": e.Error(),
+				"id":  eId,
 			})
 			return
 		})
@@ -538,9 +590,13 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 			findErr := findResult.UnwrapError()
 
+			eId := uuid.NewString()
+
+			log.Printf("db err : %s: %s", eId, findErr.Error())
+
 			ctx.AbortWithStatusJSON(404, gin.H{
 				"msg": "object not found",
-				"err": findErr,
+				"id":  eId,
 			})
 		} else {
 			modelCopy := findResult.Unwrap()
