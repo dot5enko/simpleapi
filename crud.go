@@ -393,7 +393,9 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 			// decode query
 			filtersMap := map[string]any{}
-			json.Unmarshal([]byte(ctx.Query("filter")), &filtersMap)
+
+			_filterValue := ctx.Query("filter")
+			json.Unmarshal([]byte(_filterValue), &filtersMap)
 
 			// override user related fields to current auth user if its not an admin
 			// todo make it type safe through generics
@@ -415,6 +417,12 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			}
 
 			for filterFieldName, filterValue := range filtersMap {
+
+				declaredFieldName, ok := modelDataStruct.ReverseFillFields[filterFieldName]
+
+				if !ok {
+					continue
+				}
 
 				// allow only whitelisted fields
 				if !userAuthData.IsAdmin {
@@ -446,8 +454,17 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 							fQueryCond, argVal := filterGenerator(filterFieldName, mapVal)
 
-							parts = append(parts, fQueryCond)
-							filterArgs = append(filterArgs, argVal)
+							fieldInfo := modelDataStruct.Fields[declaredFieldName]
+
+							// convert back to gjson for simplicity of using force converting types methods
+							valj, _ := json.Marshal(argVal)
+
+							argProcessed, errProcessingFilterVal := ProcessFieldType(fieldInfo, gjson.ParseBytes(valj))
+
+							if errProcessingFilterVal == nil {
+								parts = append(parts, fQueryCond)
+								filterArgs = append(filterArgs, argProcessed)
+							}
 						}
 					}
 				} else {

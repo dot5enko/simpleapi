@@ -24,8 +24,9 @@ type ApiTags struct {
 	Validate *string
 	Name     *string
 
-	TypeKind reflect.Kind
-	Typ      string
+	TypeKind   reflect.Kind
+	NativeType reflect.Type
+	Typ        string
 
 	WriteRole uint64
 	ReadRole  uint64
@@ -52,7 +53,8 @@ type UserReferenceInfo struct {
 type FieldsMapping struct {
 	TypeName string
 
-	Fields map[string]ApiTags
+	Fields            map[string]ApiTags
+	ReverseFillFields map[string]string
 
 	FillExtraMethod bool
 	OutExtraMethod  bool
@@ -97,6 +99,9 @@ func ToSnake(camel string) (snake string) {
 func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 
 	objMapp.Fields = make(map[string]ApiTags)
+
+	objMapp.ReverseFillFields = make(map[string]string)
+
 	objMapp.Outable = []string{}
 	objMapp.Fillable = []string{}
 	objMapp.Filterable = make(map[string]bool)
@@ -130,9 +135,16 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 		declaredName := fieldData.Name
 		defName := ToSnake(declaredName)
 
+		fillName := defName
+		// outName := defName
+
 		ftype := fieldData.Type
 		result.TypeKind = ftype.Kind()
+		result.NativeType = ftype
+
 		if result.TypeKind == reflect.Struct {
+			// todo move out of this code
+			// this algo used in dto mapping
 			result.Typ = ftype.PkgPath() + "/" + ftype.Name()
 		} else {
 			result.Typ = ftype.Name()
@@ -152,6 +164,8 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 			} else {
 				result.Fillable = true
 				result.FillName = &fillable
+
+				fillName = fillable
 			}
 		} else {
 			result.Fillable = true
@@ -167,6 +181,8 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 			} else {
 				result.Outable = true
 				result.Name = &tag
+
+				// outName = tag
 			}
 		} else {
 			result.Outable = true
@@ -223,6 +239,9 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 			objMapp.Outable = append(objMapp.Outable, declaredName)
 			objMapp.Filterable[defName] = true
 		}
+
+		// fill_name -> declaredFieldName
+		objMapp.ReverseFillFields[fillName] = declaredName
 
 		objMapp.Fields[declaredName] = result
 	}

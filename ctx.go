@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"log"
 	"reflect"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
@@ -81,99 +80,36 @@ func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *Fil
 			break
 		}
 
-		func(fieldName string) {
-			defer func() {
-				r := recover()
+		log.Printf("use fname: %s", _fieldName)
 
-				if r != nil {
-					err = fmt.Errorf("unable to fill `%s` from dto: %s. fields available", fieldName, r)
-					br = true
-				}
-			}()
+		fieldInfo := m.Fields[_fieldName]
 
-			fieldInfo := m.Fields[fieldName]
+		// todo optimize
+		// make groups inheritance, etc
+		if fieldInfo.WriteRole != uint64(req.RoleGroup) {
+			return
+		}
 
-			field := reflected.FieldByName(fieldName)
+		dtoFieldToUse := *fieldInfo.FillName
 
-			dtoFieldToUse := *fieldInfo.FillName
+		jsonFieldValue := dto.Get(dtoFieldToUse)
 
-			fieldType := field.Type()
-			fieldTypeKind := fieldType.Kind()
+		if !jsonFieldValue.Exists() {
+			// skip non passed fields to update
+			return
+		}
 
-			// if field.IsZero() {
-			// 	err = fmt.Errorf("unable to find a `%s` field on type : %s. field type and kind : %s %s type declared : %s",
-			// 		fieldName, reflected.Type().Name(), fieldType.Name(), fieldTypeKind.String(), m.TypeName,
-			// 	)
-			// 	br = true
-			// 	return
-			// }
+		field := reflected.FieldByName(_fieldName)
 
-			// todo optimize
-			// make groups inheritance, etc
-			if fieldInfo.WriteRole != uint64(req.RoleGroup) {
-				return
-			}
+		dtoData, fieldProcessingErr := ProcessFieldType(fieldInfo, jsonFieldValue)
+		if fieldProcessingErr != nil {
+			log.Printf("error processing a field: %s: %s", _fieldName, fieldProcessingErr.Error())
+		}
 
-			var dtoData any
+		if dtoData != nil {
+			field.Set(reflect.ValueOf(dtoData))
+		}
 
-			jsonFieldValue := dto.Get(dtoFieldToUse)
-
-			if !jsonFieldValue.Exists() {
-				// skip non passed fields to update
-				return
-			}
-
-			switch fieldTypeKind {
-			case reflect.Struct:
-
-				if fieldInfo.Typ == "time/Time" {
-
-					unixts := dto.Get(dtoFieldToUse).Int()
-					tread := time.Unix(unixts, 0)
-
-					dtoData = tread
-
-				} else {
-					log.Panicf("unsupported field (%s) type to set from json: %s", fieldName, fieldInfo.Typ)
-				}
-			case reflect.Int:
-				intVal := jsonFieldValue.Int()
-				dtoData = int(intVal)
-
-			case reflect.Uint8:
-				uintval := jsonFieldValue.Uint()
-
-				if uintval > 255 {
-					err = ErrNumberOverflow
-					br = true
-					return
-				} else {
-					dtoData = uint8(uintval)
-				}
-
-			default:
-
-				if fieldName == "AppType" {
-					log.Printf("app type field kind : %d", fieldTypeKind)
-				}
-
-				if fieldTypeKind >= 2 && fieldTypeKind <= 6 {
-					// cast to int
-					dtoData = dto.Get(dtoFieldToUse).Int()
-				} else {
-					if fieldTypeKind >= 7 && fieldTypeKind <= 11 {
-						dtoData = dto.Get(dtoFieldToUse).Uint()
-					} else {
-						dtoData = dto.Get(dtoFieldToUse).Value()
-					}
-				}
-			}
-
-			if dtoData != nil {
-				field.Set(reflect.ValueOf(dtoData))
-			}
-
-		}(_fieldName)
 	}
 
 	if m.FillExtraMethod {
