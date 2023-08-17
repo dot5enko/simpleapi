@@ -135,6 +135,12 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result) (result an
 		} else {
 			dtoData = uint32(uintval)
 		}
+
+	case reflect.Uint64:
+		dtoData = jsonFieldValue.Uint()
+	case reflect.Int64:
+		intval := jsonFieldValue.Int()
+		dtoData = int64(intval)
 	case reflect.Uint:
 		uintval := jsonFieldValue.Uint()
 

@@ -80,33 +80,44 @@ func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *Fil
 			break
 		}
 
-		fieldInfo := m.Fields[_fieldName]
+		func() {
 
-		// todo optimize
-		// make groups inheritance, etc
-		if fieldInfo.WriteRole != uint64(req.RoleGroup) {
-			return
-		}
+			defer func() {
+				r := recover()
+				if r != nil {
+					log.Printf("error processing a field: %s: %v", _fieldName, r)
+				}
+			}()
 
-		dtoFieldToUse := *fieldInfo.FillName
+			fieldInfo := m.Fields[_fieldName]
 
-		jsonFieldValue := dto.Get(dtoFieldToUse)
+			// todo optimize
+			// make groups inheritance, etc
+			if fieldInfo.WriteRole != uint64(req.RoleGroup) {
+				return
+			}
 
-		if !jsonFieldValue.Exists() {
-			// skip non passed fields to update
-			return
-		}
+			dtoFieldToUse := *fieldInfo.FillName
 
-		field := reflected.FieldByName(_fieldName)
+			jsonFieldValue := dto.Get(dtoFieldToUse)
 
-		dtoData, fieldProcessingErr := ProcessFieldType(fieldInfo, jsonFieldValue)
-		if fieldProcessingErr != nil {
-			log.Printf("error processing a field: %s: %s", _fieldName, fieldProcessingErr.Error())
-		}
+			if !jsonFieldValue.Exists() {
+				// skip non passed fields to update
+				return
+			}
 
-		if dtoData != nil {
-			field.Set(reflect.ValueOf(dtoData))
-		}
+			field := reflected.FieldByName(_fieldName)
+
+			dtoData, fieldProcessingErr := ProcessFieldType(fieldInfo, jsonFieldValue)
+			if fieldProcessingErr != nil {
+				log.Printf("error processing a field: %s: %s", _fieldName, fieldProcessingErr.Error())
+			} else {
+				if dtoData != nil {
+					field.Set(reflect.ValueOf(dtoData))
+				}
+			}
+		}()
+
 	}
 
 	if m.FillExtraMethod {
