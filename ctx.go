@@ -107,7 +107,6 @@ func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *Fil
 		if dtoData != nil {
 			field.Set(reflect.ValueOf(dtoData))
 		}
-
 	}
 
 	if m.FillExtraMethod {

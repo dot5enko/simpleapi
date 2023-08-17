@@ -2,6 +2,7 @@ package simpleapi
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"time"
 
@@ -67,31 +68,85 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result) (result an
 			}
 		}
 	case reflect.Int:
-		intVal := jsonFieldValue.Int()
-		dtoData = int(intVal)
+		intval := jsonFieldValue.Int()
+
+		if intval > math.MaxInt || intval < math.MinInt {
+			err = ErrNumberOverflow
+			return
+		} else {
+			dtoData = int(intval)
+		}
+
+	case reflect.Int8:
+		intval := jsonFieldValue.Int()
+
+		if intval > math.MaxInt8 || intval < math.MinInt8 {
+			err = ErrNumberOverflow
+			return
+		} else {
+			dtoData = int8(intval)
+		}
+
+	case reflect.Int16:
+		intval := jsonFieldValue.Int()
+
+		if intval > math.MaxInt16 || intval < math.MinInt16 {
+			err = ErrNumberOverflow
+			return
+		} else {
+			dtoData = int16(intval)
+		}
+
+	case reflect.Int32:
+		intval := jsonFieldValue.Int()
+
+		if intval > math.MaxInt32 || intval < math.MinInt32 {
+			err = ErrNumberOverflow
+			return
+		} else {
+			dtoData = int32(intval)
+		}
 
 	case reflect.Uint8:
 		uintval := jsonFieldValue.Uint()
 
-		if uintval > 255 {
+		if uintval > math.MaxUint8 {
 			err = ErrNumberOverflow
 			return
 		} else {
 			dtoData = uint8(uintval)
 		}
+	case reflect.Uint16:
+		uintval := jsonFieldValue.Uint()
+
+		if uintval > math.MaxUint16 {
+			err = ErrNumberOverflow
+			return
+		} else {
+			dtoData = uint16(uintval)
+		}
+
+	case reflect.Uint32:
+		uintval := jsonFieldValue.Uint()
+
+		if uintval > math.MaxUint32 {
+			err = ErrNumberOverflow
+			return
+		} else {
+			dtoData = uint32(uintval)
+		}
+	case reflect.Uint:
+		uintval := jsonFieldValue.Uint()
+
+		if uintval > math.MaxUint {
+			err = ErrNumberOverflow
+			return
+		} else {
+			dtoData = uint(uintval)
+		}
 
 	default:
-
-		if fieldTypeKind >= 2 && fieldTypeKind <= 6 {
-			// cast to int
-			dtoData = jsonFieldValue.Int()
-		} else {
-			if fieldTypeKind >= 7 && fieldTypeKind <= 11 {
-				dtoData = jsonFieldValue.Uint()
-			} else {
-				dtoData = jsonFieldValue.Value()
-			}
-		}
+		dtoData = jsonFieldValue.Value()
 	}
 
 	return dtoData, err
