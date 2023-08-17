@@ -80,8 +80,6 @@ func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *Fil
 			break
 		}
 
-		log.Printf("use fname: %s", _fieldName)
-
 		fieldInfo := m.Fields[_fieldName]
 
 		// todo optimize
