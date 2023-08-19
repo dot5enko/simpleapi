@@ -37,6 +37,7 @@ type ApiTags struct {
 
 	UserIdFlag bool // indicates that this field is substitued with authenticated user id on filter
 	AdminOnly  bool
+	Softdelete bool
 
 	FillName *string
 }
@@ -222,6 +223,7 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 
 		_, result.UserIdFlag = flagsMap["userid"]
 		_, result.AdminOnly = flagsMap["adminonly"]
+		_, result.Softdelete = flagsMap["softdelete"]
 
 		if result.UserIdFlag {
 			objMapp.UserReferenceField = UserReferenceInfo{
