@@ -748,10 +748,21 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		})
 
 		if saveError != nil {
-			ctx.JSON(404, gin.H{
-				"msg": "unable to update object",
-				"err": saveError.Error(),
-			})
+
+			panickedErr, ok := saveError.(typed.PanickedError)
+			if ok {
+				ctx.JSON(500, gin.H{
+					"msg":   "unable to update object",
+					"stack": panickedErr.Cause,
+					"err":   saveError.Error(),
+				})
+			} else {
+
+				ctx.JSON(500, gin.H{
+					"msg": "unable to update object",
+					"err": saveError.Error(),
+				})
+			}
 		} else {
 			ctx.JSON(200, gin.H{
 				"item": ToDto(modelCopy, appctx, reqData).Unwrap(),
