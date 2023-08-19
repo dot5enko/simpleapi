@@ -397,6 +397,11 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			_filterValue := ctx.Query("filter")
 			json.Unmarshal([]byte(_filterValue), &filtersMap)
 
+			// filter soft deleted item
+			if modelDataStruct.SoftDeleteField.Has && !userAuthData.IsAdmin {
+				filtersMap[modelDataStruct.SoftDeleteField.TableColumnName] = false
+			}
+
 			// override user related fields to current auth user if its not an admin
 			// todo make it type safe through generics
 			// each table/entity should have it own type for id ?
@@ -569,6 +574,10 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		filter := map[string]any{
 			result.objectIdField: idParam,
+		}
+
+		if modelInfo.SoftDeleteField.Has && !reqData.IsAdmin {
+			filter[modelInfo.SoftDeleteField.TableColumnName] = false
 		}
 
 		// todo move to compile time

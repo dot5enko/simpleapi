@@ -69,6 +69,7 @@ type FieldsMapping struct {
 	Filterable map[string]bool
 
 	UserReferenceField UserReferenceInfo
+	SoftDeleteField    UserReferenceInfo
 }
 
 // source : https://stackoverflow.com/questions/56616196/how-to-convert-camel-case-string-to-snake-case
@@ -227,6 +228,14 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 
 		if result.UserIdFlag {
 			objMapp.UserReferenceField = UserReferenceInfo{
+				Has:             true,
+				DeclName:        declaredName,
+				TableColumnName: defName,
+			}
+		}
+
+		if result.Softdelete {
+			objMapp.SoftDeleteField = UserReferenceInfo{
 				Has:             true,
 				DeclName:        declaredName,
 				TableColumnName: defName,
