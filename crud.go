@@ -6,7 +6,6 @@ import (
 	"log"
 	"math"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -360,26 +359,13 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		})
 	})
 
-	type ListQueryParams struct {
-		SortField string `form:"sort_field"`
-		SortOrder int    `form:"order"`
-		Page      int    `form:"page"`
-	}
-
 	// get list
 	// todo impl paging
 	// todo implement filters by fields
 	group.GET("", func(ctx *gin.Context) {
 
 		var modelObj T
-
 		var items []T
-		// fieldName := "id"
-
-		filters := ""
-		filterArgs := []any{}
-
-		hasDisabledFields := len(result.disableFilterOverFields) > 0
 
 		listQueryParams := ListQueryParams{}
 		ctx.BindQuery(&listQueryParams)
@@ -388,139 +374,39 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		userAuthData := result.RequestData(ctx, appctx)
 
 		// filters
-		{
-			parts := []string{}
+		// decode userdata from query
+		filtersMap := map[string]any{}
+		_filterValue := ctx.Query("filter")
+		json.Unmarshal([]byte(_filterValue), &filtersMap)
 
-			// decode query
-			filtersMap := map[string]any{}
+		filterCompiled := prepareFilterData[T, CtxType](filtersMap, result, modelDataStruct, userAuthData, listQueryParams)
 
-			_filterValue := ctx.Query("filter")
-			json.Unmarshal([]byte(_filterValue), &filtersMap)
-
-			// filter soft deleted item
-			if modelDataStruct.SoftDeleteField.Has && !userAuthData.IsAdmin {
-				filtersMap[modelDataStruct.SoftDeleteField.TableColumnName] = false
-			}
-
-			// override user related fields to current auth user if its not an admin
-			// todo make it type safe through generics
-			// each table/entity should have it own type for id ?
-			if modelDataStruct.UserReferenceField.Has && !userAuthData.IsAdmin {
-				authId := userAuthData.AuthorizedUserId
-
-				if authId == nil {
-					ctx.JSON(200, gin.H{
-						"items":       []any{},
-						"pages":       0,
-						"total_items": 0,
-						"msg":         "no access",
-					})
-					return
-				} else {
-					filtersMap[modelDataStruct.UserReferenceField.TableColumnName] = userAuthData.AuthorizedUserId
-				}
-			}
-
-			for filterFieldName, filterValue := range filtersMap {
-
-				declaredFieldName, ok := modelDataStruct.ReverseFillFields[filterFieldName]
-
-				if !ok {
-					continue
-				}
-
-				// allow only whitelisted fields
-				if !userAuthData.IsAdmin {
-					_, canBeFiltered := modelDataStruct.Filterable[filterFieldName]
-
-					if !canBeFiltered {
-						continue
-					}
-				}
-
-				// if result.CrudGroup.Config.DisableFilter
-				if hasDisabledFields {
-					_, disabled := result.disableFilterOverFields[filterFieldName]
-					if disabled {
-						continue
-					}
-				}
-
-				mapVal, isMap := filterValue.(map[string]any)
-
-				if isMap {
-
-					opName, ok := mapVal["op"].(string)
-
-					if ok {
-						filterGenerator, supported := supportedFilters[opName]
-
-						if supported {
-
-							fQueryCond, argVal := filterGenerator(filterFieldName, mapVal)
-
-							fieldInfo := modelDataStruct.Fields[declaredFieldName]
-
-							// convert back to gjson for simplicity of using force converting types methods
-							valj, _ := json.Marshal(argVal)
-
-							argProcessed, errProcessingFilterVal := ProcessFieldType(fieldInfo, gjson.ParseBytes(valj))
-
-							if errProcessingFilterVal == nil {
-								parts = append(parts, fQueryCond)
-								filterArgs = append(filterArgs, argProcessed)
-							}
-						}
-					}
-				} else {
-
-					// todo validate type
-					// expose type processor same as supported filters
-
-					parts = append(parts, fmt.Sprintf("%s = ?", filterFieldName))
-					filterArgs = append(filterArgs, filterValue)
-				}
-			}
-
-			filters = strings.Join(parts, " AND ")
+		if !filterCompiled.IsOk() {
+			ctx.JSON(200, gin.H{
+				"items":       []any{},
+				"pages":       0,
+				"total_items": 0,
+				"msg":         "no access",
+			})
+			return
 		}
 
-		reqData := result.RequestData(ctx, appctx)
-
-		curPage := listQueryParams.Page
-		if curPage <= 0 {
-			curPage = 1
-		}
-
-		perPageVal, perPageErr := strconv.ParseInt(ctx.Query("per_page"), 10, 64)
-		if perPageErr != nil || perPageVal <= 0 {
-			perPageVal = int64(result.paging.PerPage)
-		}
-
-		limitVal := int(perPageVal)
-		offsetVal := (curPage - 1) * int(perPageVal)
+		filterData := filterCompiled.Unwrap()
+		filtersSql := filterData.QueryPlaceholder
 
 		totalItems := int64(0)
-		// todo dont count soft removed
-		appctx.Db.Raw().Model(&modelObj).Where(filters, filterArgs...).Count(&totalItems)
-		pagesCount := math.Ceil(float64(totalItems) / float64(perPageVal))
 
-		// check sorting field
-		if listQueryParams.SortField != "" {
-			_, canBeSorted := modelDataStruct.Filterable[listQueryParams.SortField]
-
-			if !canBeSorted {
-				listQueryParams.SortField = ""
-			}
-		}
+		// todo cache
+		appctx.Db.Raw().Model(&modelObj).Where(filtersSql, filterData.Args...).Count(&totalItems)
+		pagesCount := math.Ceil(float64(totalItems) / float64(filterData.PerPage))
 
 		SortAndFindAllWhere[T](appctx.Db,
 			listQueryParams.SortField,
 			listQueryParams.SortOrder,
-			limitVal,
-			offsetVal,
-			filters,
-			filterArgs...).Then(func(t *[]T) *typed.Result[[]T] {
+			filterData.Limit,
+			filterData.Offset,
+			filtersSql,
+			filterData.Args...).Then(func(t *[]T) *typed.Result[[]T] {
 
 			items = *t
 
@@ -531,7 +417,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 				// check if item has dto converter
 				// todo pass permission value
-				_dtoResult := ToDto(it, appctx, reqData)
+				_dtoResult := ToDto(it, appctx, userAuthData)
 				if _dtoResult.IsOk() {
 					unwrapped := _dtoResult.Unwrap()
 					dtos = append(dtos, unwrapped)

@@ -38,7 +38,6 @@ func testToDto(t *testing.T) {
 	jDto, _ := json.MarshalIndent(dto, "", "    ")
 
 	t.Logf(" dto : %s", jDto)
-
 }
 
 // func testWriteProtectedField(t *testing.T) {
