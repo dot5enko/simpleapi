@@ -31,6 +31,9 @@ type ApiTags struct {
 	WriteRole uint64
 	ReadRole  uint64
 
+	// do not process it
+	DeclError bool
+
 	Fillable bool
 	Outable  bool
 	Internal bool
@@ -98,6 +101,17 @@ func ToSnake(camel string) (snake string) {
 	return b.String()
 }
 
+func checkFieldUniqueAndRegister(mp map[string]bool, fname string) bool {
+	_, contains := mp[fname]
+
+	if !contains {
+		mp[fname] = true
+		return true
+	} else {
+		return false
+	}
+}
+
 func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 
 	objMapp.Fields = make(map[string]ApiTags)
@@ -126,6 +140,9 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 
 		// log.Printf(" -- type %s : extra out : %v, extra fill : %v. onupdate : %v", _type.Name(), additionalDto, additionalFill, additionalOnUpdate)
 	}
+
+	usedOutFields := map[string]bool{}
+	usedFillFields := map[string]bool{}
 
 	for i := 0; i < fields_count; i++ {
 
@@ -156,6 +173,21 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 		if has_api {
 			if api == "-" {
 				result.Internal = true
+			} else {
+
+				fillOk := checkFieldUniqueAndRegister(usedFillFields, api)
+				outOk := checkFieldUniqueAndRegister(usedOutFields, api)
+
+				if !fillOk || !outOk {
+					result.DeclError = true
+					continue
+				}
+
+				result.Fillable = true
+				result.FillName = &api
+
+				result.Outable = true
+				result.Name = &api
 			}
 		}
 
@@ -164,14 +196,31 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 			if fillable == "-" {
 				result.Fillable = false
 			} else {
+
+				fillOk := checkFieldUniqueAndRegister(usedFillFields, fillable)
+
+				if !fillOk {
+					result.DeclError = true
+					continue
+				}
 				result.Fillable = true
 				result.FillName = &fillable
 
 				fillName = fillable
 			}
 		} else {
-			result.Fillable = true
-			result.FillName = &defName
+			if result.FillName == nil {
+
+				fillOk := checkFieldUniqueAndRegister(usedFillFields, defName)
+
+				if !fillOk {
+					result.DeclError = true
+					continue
+				}
+
+				result.Fillable = true
+				result.FillName = &defName
+			}
 		}
 
 		// todo optimize
@@ -181,14 +230,32 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 			if tag == "-" {
 				result.Outable = false
 			} else {
+
+				fillOk := checkFieldUniqueAndRegister(usedOutFields, tag)
+
+				if !fillOk {
+					result.DeclError = true
+					continue
+				}
+
 				result.Outable = true
 				result.Name = &tag
 
 				// outName = tag
 			}
 		} else {
-			result.Outable = true
-			result.Name = &defName
+			if result.Name == nil {
+
+				fillOk := checkFieldUniqueAndRegister(usedOutFields, defName)
+
+				if !fillOk {
+					result.DeclError = true
+					continue
+				}
+
+				result.Outable = true
+				result.Name = &defName
+			}
 		}
 
 		validate, hasValidate := fieldData.Tag.Lookup("validate")

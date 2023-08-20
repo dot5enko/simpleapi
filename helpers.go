@@ -55,7 +55,7 @@ func GetUserId(ctx *gin.Context) uint64 {
 
 	features, ok := userObject.(UserFeatures)
 	if !ok {
-		panic("user object doe's not implement simpleapi.UserFeatures")
+		panic("user object doe's not implement UserFeatures")
 	}
 
 	return features.GetId()
