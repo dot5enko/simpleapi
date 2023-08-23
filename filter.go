@@ -155,7 +155,7 @@ func prepareFilterData[T any, CtxType any](
 		Args:             filterArgs,
 		Limit:            limitVal,
 		Offset:           offsetVal,
-		PerPage:          int(listQueryParams.PerPage),
+		PerPage:          int(perPageVal),
 		_filter:          filtersMap,
 	})
 }
