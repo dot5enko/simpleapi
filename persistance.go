@@ -29,19 +29,26 @@ type OnUpdateEventHandler[CtxType any, T any] interface {
 }
 
 type DbWrapper[CtxType any] struct {
-	db  *gorm.DB
+	db    *gorm.DB
+	topDb *gorm.DB
+
 	app *AppContext[CtxType]
 }
 
 func WrapGormDb[T any](d *gorm.DB, ctx *AppContext[T]) DbWrapper[T] {
 	return DbWrapper[T]{
-		db:  d,
-		app: ctx,
+		db:    d,
+		topDb: d,
+		app:   ctx,
 	}
 }
 
 func (d DbWrapper[CtxType]) Raw() *gorm.DB {
 	return d.db
+}
+
+func (d DbWrapper[CtxType]) CleanCopy() DbWrapper[CtxType] {
+	return WrapGormDb[CtxType](d.topDb, d.app)
 }
 
 func (d *DbWrapper[CtxType]) setRaw(_db *gorm.DB) {
