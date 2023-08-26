@@ -238,7 +238,9 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	}
 
 	if hasAdminOnlyFiedls && result.CrudGroup.Config.RequestDataGenerator == nil {
-		log.Printf("crud group type has adminOnly fields, but no rule provided on how to grant role")
+
+		typ := reflect.Indirect(reflect.ValueOf(result.Model)).Type()
+		log.Printf("crud group type has adminOnly fields, but no rule provided on how to grant role, %#+v", typ.Name())
 	}
 
 	var writePermissionMiddleware gin.HandlerFunc = func(ctx *gin.Context) {
