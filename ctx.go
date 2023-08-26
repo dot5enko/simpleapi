@@ -62,9 +62,9 @@ func (c AppContext[T]) RegisteredTypes() map[string]FieldsMapping {
 	return c.objects
 }
 
-func (c AppContext[T]) FillEntityFromDto(obj any, dto gjson.Result, options *FillFromDtoOptions, req RequestData) (err error) {
+func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, dto gjson.Result, options *FillFromDtoOptions, req RequestData) (err error) {
 
-	m := c.ApiData(obj)
+	m := modelTypeData
 
 	reflected := reflect.Indirect(reflect.ValueOf(obj))
 

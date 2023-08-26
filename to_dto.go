@@ -5,6 +5,7 @@ import "github.com/dot5enko/typed"
 // todo add softdeleted item handler
 func ToDto[T any, CtxType any](it T, appctx *AppContext[CtxType], req RequestData) typed.Result[map[string]any] {
 
+	// optimize
 	m := appctx.ApiData(it)
 
 	rawDto := m.ToDto(it, req)

@@ -38,6 +38,8 @@ type CrudConfig[T any, CtxType any] struct {
 	App         *AppContext[CtxType]
 	CrudGroup   *CrudGroup[CtxType]
 
+	TypeDataModel FieldsMapping
+
 	requestDataGeneratorOverride func(g *gin.Context, ctx *AppContext[CtxType]) RequestData
 
 	existing     []gin.HandlerFunc
@@ -172,6 +174,8 @@ func getIdValue[T any](obj T) uint64 {
 
 func New[T any, CtxType any](crudGroup *CrudGroup[CtxType], group *gin.RouterGroup, model T) *CrudConfig[T, CtxType] {
 
+	modelData := crudGroup.Ctx.ApiData(model)
+
 	result := CrudConfig[T, CtxType]{
 		ParentGroup: group,
 		Model:       model,
@@ -185,6 +189,8 @@ func New[T any, CtxType any](crudGroup *CrudGroup[CtxType], group *gin.RouterGro
 		paging: PagingConfig{
 			PerPage: 30,
 		},
+
+		TypeDataModel: modelData,
 	}
 
 	// todo check rights in all methods
@@ -221,6 +227,19 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	group := result.ParentGroup
 	model := result.Model
 	appctx := result.App
+
+	hasAdminOnlyFiedls := false
+
+	for _, it := range result.TypeDataModel.Fields {
+		if it.AdminOnly {
+			hasAdminOnlyFiedls = true
+			break
+		}
+	}
+
+	if hasAdminOnlyFiedls && result.CrudGroup.Config.RequestDataGenerator == nil {
+		log.Printf("crud group type has adminOnly fields, but no rule provided on how to grant role")
+	}
 
 	var writePermissionMiddleware gin.HandlerFunc = func(ctx *gin.Context) {
 		wp := result.CrudGroup.Config.WritePermission
@@ -273,7 +292,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		req := result.RequestData(ctx, appctx)
 
-		fillError := appctx.FillEntityFromDto(&modelCopy, parsedJson, nil, req)
+		fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, parsedJson, nil, req)
 
 		if fillError != nil {
 			ctx.JSON(500, gin.H{
@@ -370,7 +389,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		listQueryParams := ListQueryParams{}
 		ctx.BindQuery(&listQueryParams)
 
-		modelDataStruct := appctx.ApiData(modelObj)
+		// TODO put into crud group state, no need to get it each time manually
+		modelDataStruct := result.TypeDataModel
 		userAuthData := result.RequestData(ctx, appctx)
 
 		// filters
@@ -451,8 +471,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	existingItems := group.Group("/:id")
 	existingItems.Use(func(ctx *gin.Context) {
 
-		var modelObj T
-		modelInfo := appctx.ApiData(modelObj)
+		modelInfo := result.TypeDataModel
 
 		reqData := result.RequestData(ctx, appctx)
 
@@ -605,7 +624,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		req := result.RequestData(ctx, appctx)
 
-		fillError := appctx.FillEntityFromDto(ref, parsed, nil, req)
+		fillError := appctx.FillEntityFromDto(result.TypeDataModel, ref, parsed, nil, req)
 
 		if fillError != nil {
 			ctx.JSON(500, gin.H{
@@ -624,7 +643,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 			if saveErr == nil {
 
-				fieldsData := appctx.ApiData(ref)
+				fieldsData := result.TypeDataModel
 
 				if fieldsData.UpdateExtraMethod {
 					// get updater
