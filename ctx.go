@@ -93,7 +93,7 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 
 			// todo optimize
 			// make groups inheritance, etc
-			if fieldInfo.WriteRole != uint64(req.RoleGroup) {
+			if fieldInfo.WriteRole > 0 && fieldInfo.WriteRole != uint64(req.RoleGroup) {
 				return
 			}
 
