@@ -70,7 +70,9 @@ type PagingConfig struct {
 	PerPage int
 }
 
-func (it *CrudConfig[T, CtxType]) RequestData(g *gin.Context, ctx *AppContext[CtxType]) RequestData {
+func (it *CrudConfig[T, CtxType]) RequestData(g *gin.Context) RequestData {
+
+	ctx := &it.CrudGroup.Ctx
 
 	if it.requestDataGeneratorOverride != nil {
 		return it.requestDataGeneratorOverride(g, ctx)
@@ -292,7 +294,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		// default fill from model tags
 		parsedJson := gjson.ParseBytes(data)
 
-		req := result.RequestData(ctx, appctx)
+		req := result.RequestData(ctx)
 
 		fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, parsedJson, nil, req)
 
@@ -372,7 +374,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			return
 		}
 
-		reqData := result.RequestData(ctx, appctx)
+		reqData := result.RequestData(ctx)
 
 		ctx.JSON(200, gin.H{
 			"created": true,
@@ -381,8 +383,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	})
 
 	// get list
-	// todo impl paging
-	// todo implement filters by fields
 	group.GET("", func(ctx *gin.Context) {
 
 		var modelObj T
@@ -393,7 +393,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		// TODO put into crud group state, no need to get it each time manually
 		modelDataStruct := result.TypeDataModel
-		userAuthData := result.RequestData(ctx, appctx)
+		userAuthData := result.RequestData(ctx)
 
 		// filters
 		// decode userdata from query
@@ -475,7 +475,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		modelInfo := result.TypeDataModel
 
-		reqData := result.RequestData(ctx, appctx)
+		reqData := result.RequestData(ctx)
 
 		idParam := ctx.Param("id")
 
@@ -483,7 +483,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			result.objectIdField: idParam,
 		}
 
-		if modelInfo.SoftDeleteField.Has && !reqData.IsAdmin {
+		if modelInfo.SoftDeleteField.Has {
+			// do not display removed items for admin
 			filter[modelInfo.SoftDeleteField.TableColumnName] = false
 		}
 
@@ -619,12 +620,10 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			return
 		}
 
-		reqData := result.RequestData(ctx, appctx)
-
 		anotherCopy := modelCopy
 		ref := &anotherCopy
 
-		req := result.RequestData(ctx, appctx)
+		req := result.RequestData(ctx)
 
 		fillError := appctx.FillEntityFromDto(result.TypeDataModel, ref, parsed, nil, req)
 
@@ -681,7 +680,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			}
 		} else {
 			ctx.JSON(200, gin.H{
-				"item": ToDto(modelCopy, appctx, reqData).Unwrap(),
+				"item": ToDto(modelCopy, appctx, req).Unwrap(),
 			})
 		}
 
@@ -694,24 +693,59 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		model, _ := ctx.Get("_eobj")
 		modelCopy = model.(T)
 
-		deleteError := appctx.Db.Delete(&modelCopy)
-		if deleteError != nil {
-			ctx.JSON(500, gin.H{
-				"msg": "unable to remove",
-				"err": deleteError.Error(),
-			})
-			return
+		if result.TypeDataModel.SoftDeleteField.Has {
+			// soft removable items are not actually deleted
+
+			reqData := result.RequestData(ctx)
+
+			// todo make it somewhat clear what is going on here
+			dto := gjson.Parse(fmt.Sprintf(`{"%s":true}`, result.TypeDataModel.SoftDeleteField.TableColumnName))
+
+			fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, dto, nil, reqData)
+
+			if fillError != nil {
+				ctx.JSON(500, gin.H{
+					"msg": "fill object fields erorr",
+					"err": fillError.Error(),
+				})
+				return
+			}
+
+			updateErr := appctx.Db.Save(&modelCopy)
+			if updateErr != nil {
+				ctx.JSON(500, gin.H{
+					"msg": "unable to soft remove",
+					"err": updateErr.Error(),
+				})
+				return
+			} else {
+				ctx.JSON(200, gin.H{
+					"ok":  true,
+					"msg": "soft removed",
+				})
+			}
+
 		} else {
-			ctx.JSON(200, gin.H{
-				"ok": true,
-			})
+
+			deleteError := appctx.Db.Delete(&modelCopy)
+			if deleteError != nil {
+				ctx.JSON(500, gin.H{
+					"msg": "unable to remove",
+					"err": deleteError.Error(),
+				})
+				return
+			} else {
+				ctx.JSON(200, gin.H{
+					"ok": true,
+				})
+			}
 		}
 
 	})
 
 	existingItems.GET("", func(ctx *gin.Context) {
 
-		reqData := result.RequestData(ctx, appctx)
+		reqData := result.RequestData(ctx)
 
 		start := time.Now()
 
@@ -744,7 +778,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				Request: ctx,
 			}
 
-			cur.ItemHandler(isolated, &cur, result.RequestData(ctx, appctx))
+			cur.ItemHandler(isolated, &cur, result.RequestData(ctx))
 
 		})
 	}
