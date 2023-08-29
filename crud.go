@@ -614,7 +614,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		if !parsed.Exists() {
 			ctx.JSON(500, gin.H{
-				"msg": "unable to decode obhect info",
+				"msg": "unable to decode object info",
 				"raw": string(data),
 			})
 			return
@@ -624,6 +624,12 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		ref := &anotherCopy
 
 		req := result.RequestData(ctx)
+
+		var debugLogs *arrayLogger
+
+		if req.Debug {
+			req.DebugLogger, debugLogs = new_debug_logger()
+		}
 
 		fillError := appctx.FillEntityFromDto(result.TypeDataModel, ref, parsed, nil, req)
 
@@ -640,13 +646,23 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			isolatedContext := appctx.isolateDatabase(tx)
 			isolatedContext.Request = ctx
 
-			saveErr := appctx.Db.Save(&anotherCopy)
+			saveErr := appctx.Db.Save(ref)
 
+			// todo remove
 			if saveErr == nil {
 
 				fieldsData := result.TypeDataModel
 
+				if req.Debug {
+					req.DebugLogger.Printf("saved succesfully")
+				}
+
 				if fieldsData.UpdateExtraMethod {
+
+					if req.Debug {
+						req.DebugLogger.Printf("processing extra update method for entity")
+					}
+
 					// get updater
 
 					log.Printf("model(%s) has an update event handler", fieldsData.TypeName)
@@ -657,6 +673,12 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 						return updateEventError
 					}
 				}
+			} else {
+
+				if req.Debug {
+					req.DebugLogger.Printf("got an error while saving item")
+				}
+
 			}
 
 			return saveErr
@@ -664,24 +686,34 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		if saveError != nil {
 
-			panickedErr, ok := saveError.(typed.PanickedError)
-			if ok {
-				ctx.JSON(500, gin.H{
-					"msg":   "unable to update object",
-					"stack": panickedErr.Cause,
-					"err":   saveError.Error(),
-				})
-			} else {
-
-				ctx.JSON(500, gin.H{
-					"msg": "unable to update object",
-					"err": saveError.Error(),
-				})
+			repsJson := gin.H{
+				"msg": "unable to update object",
 			}
+
+			if req.Debug {
+				repsJson["err"] = saveError.Error()
+
+				panickedErr, ok := saveError.(typed.PanickedError)
+				if ok {
+					repsJson["stack"] = panickedErr.Cause
+				}
+
+				repsJson["logs"] = debugLogs.lines
+			}
+			ctx.JSON(500, repsJson)
 		} else {
-			ctx.JSON(200, gin.H{
-				"item": ToDto(modelCopy, appctx, req).Unwrap(),
-			})
+
+			resultItem := ToDto(anotherCopy, appctx, req).Unwrap()
+
+			_resultJson := gin.H{
+				"item": resultItem,
+			}
+
+			if req.Debug {
+				_resultJson["logs"] = debugLogs.lines
+			}
+
+			ctx.JSON(200, _resultJson)
 		}
 
 	})

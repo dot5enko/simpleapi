@@ -24,6 +24,9 @@ type RequestData struct {
 	IsAdmin          bool
 	RoleGroup        uint8
 	AuthorizedUserId any // todo use generic type
+
+	Debug       bool
+	DebugLogger *log.Logger
 }
 
 type AppContext[T any] struct {
@@ -86,6 +89,10 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 				r := recover()
 				if r != nil {
 					log.Printf("error processing a field: %s: %v", _fieldName, r)
+
+					if req.Debug {
+						req.DebugLogger.Printf("\t [%s]  error processing: %v", _fieldName, r)
+					}
 				}
 			}()
 
@@ -94,6 +101,11 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 			// todo optimize
 			// make groups inheritance, etc
 			if fieldInfo.WriteRole > 0 && fieldInfo.WriteRole != uint64(req.RoleGroup) {
+
+				if req.Debug {
+					req.DebugLogger.Printf("\t [%s] skipped filling because user nor admin not it has needed group to write this field", _fieldName)
+				}
+
 				return
 			}
 
@@ -111,16 +123,29 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 			dtoData, fieldProcessingErr := ProcessFieldType(fieldInfo, jsonFieldValue)
 			if fieldProcessingErr != nil {
 				log.Printf("error processing a field: %s: %s", _fieldName, fieldProcessingErr.Error())
+
+				if req.Debug {
+					req.DebugLogger.Printf("\t [%s] error processing a field: %s", _fieldName, fieldProcessingErr.Error())
+				}
+
 			} else {
 				if dtoData != nil {
 					field.Set(reflect.ValueOf(dtoData))
+
+					if req.Debug {
+						req.DebugLogger.Printf("\t [%s] set `%v`", _fieldName, dtoData)
+					}
 				}
 			}
 		}()
-
 	}
 
 	if m.FillExtraMethod {
+
+		if req.Debug {
+			req.DebugLogger.Printf(" has fill extra method, processing")
+		}
+
 		modelFillable, _ := any(obj).(ApiDtoFillable[T])
 
 		// todo move in transaction
