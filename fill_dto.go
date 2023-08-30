@@ -16,7 +16,7 @@ type DtoFieldTypeProcessor[T any] struct {
 	Export func(fieldVal T) any
 }
 
-var fieldTypeProcessors map[string]DtoFieldTypeProcessor[any]
+var fieldTypeProcessors = map[string]DtoFieldTypeProcessor[any]{}
 
 func RegisterFieldTypeProcessor[T any](typeName string, processor DtoFieldTypeProcessor[T]) {
 
