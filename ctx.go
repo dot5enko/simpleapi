@@ -88,7 +88,7 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 			defer func() {
 				r := recover()
 				if r != nil {
-					log.Printf("error processing a field: %s: %v", _fieldName, r)
+					log.Printf("recovered error processing a field: %s: %v", _fieldName, r)
 
 					if req.Debug {
 						req.DebugLogger.Printf("\t [%s]  error processing: %v", _fieldName, r)
@@ -120,7 +120,7 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 
 			field := reflected.FieldByName(_fieldName)
 
-			dtoData, fieldProcessingErr := ProcessFieldType(fieldInfo, jsonFieldValue)
+			dtoData, fieldProcessingErr := ProcessFieldType(fieldInfo, jsonFieldValue, req)
 			if fieldProcessingErr != nil {
 				log.Printf("error processing a field: %s: %s", _fieldName, fieldProcessingErr.Error())
 

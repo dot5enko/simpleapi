@@ -117,7 +117,7 @@ func prepareFilterData[T any, CtxType any](
 					// convert back to gjson for simplicity of using force converting types methods
 					valj, _ := json.Marshal(argVal)
 
-					argProcessed, errProcessingFilterVal := ProcessFieldType(fieldInfo, gjson.ParseBytes(valj))
+					argProcessed, errProcessingFilterVal := ProcessFieldType(fieldInfo, gjson.ParseBytes(valj), userAuthData)
 
 					if errProcessingFilterVal == nil {
 						parts = append(parts, fQueryCond)

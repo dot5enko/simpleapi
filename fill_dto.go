@@ -24,7 +24,7 @@ func RegisterFieldTypeProcessor[T any](typeName string, processor DtoFieldTypePr
 	fieldTypeProcessors[typeName] = converted
 }
 
-func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result) (result any, err error) {
+func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req RequestData) (result any, err error) {
 	defer func() {
 		r := recover()
 
@@ -46,6 +46,10 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result) (result an
 	// }
 
 	var dtoData any
+
+	if req.Debug {
+		req.DebugLogger.Printf(" [%s] field detected typ : %s", *fieldInfo.Name, fieldTypeKind.String())
+	}
 
 	switch fieldTypeKind {
 	case reflect.Struct:
@@ -78,7 +82,6 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result) (result an
 		} else {
 			dtoData = int(intval)
 		}
-
 	case reflect.Int8:
 		intval := jsonFieldValue.Int()
 
@@ -143,6 +146,8 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result) (result an
 	case reflect.Int64:
 		intval := jsonFieldValue.Int()
 		dtoData = int64(intval)
+	case reflect.String:
+		dtoData = jsonFieldValue.String()
 	case reflect.Uint:
 		uintval := jsonFieldValue.Uint()
 
@@ -154,7 +159,24 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result) (result an
 		}
 
 	default:
-		dtoData = jsonFieldValue.Value()
+
+		if req.Debug {
+			req.DebugLogger.Printf("\t [%s] field defaulted while converting from input data (json.Value), typ: %s", *fieldInfo.Name, fieldInfo.Typ)
+		}
+
+		processor, hasProcessor := fieldTypeProcessors[fieldInfo.Typ]
+
+		if !hasProcessor {
+
+			if req.Debug {
+				req.DebugLogger.Printf("\t -> not found a specific processor, using .Value()")
+			}
+
+			dtoData = jsonFieldValue.Value()
+		} else {
+			dtoData = processor.Fill(jsonFieldValue)
+		}
+
 	}
 
 	return dtoData, err
