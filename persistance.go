@@ -25,7 +25,7 @@ type OnBeforeUpdateCbAware[CtxType any] interface {
 }
 
 type OnUpdateEventHandler[CtxType any, T any] interface {
-	OnUpdate(ctx *AppContext[CtxType], prevState T, curState T) error
+	OnUpdate(ctx *AppContext[CtxType], prevState T) error
 }
 
 type DbWrapper[CtxType any] struct {

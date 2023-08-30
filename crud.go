@@ -646,7 +646,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			isolatedContext := appctx.isolateDatabase(tx)
 			isolatedContext.Request = ctx
 
-			saveErr := appctx.Db.Save(ref)
+			saveErr := isolatedContext.Db.Save(ref)
 
 			// todo remove
 			if saveErr == nil {
@@ -663,13 +663,14 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 						req.DebugLogger.Printf("processing extra update method for entity")
 					}
 
-					// get updater
-
-					log.Printf("model(%s) has an update event handler", fieldsData.TypeName)
-
 					objUpdater, _ := any(ref).(OnUpdateEventHandler[CtxType, T])
-					updateEventError := objUpdater.OnUpdate(appctx, modelCopy, *ref)
+					updateEventError := objUpdater.OnUpdate(&isolatedContext, modelCopy)
 					if updateEventError != nil {
+
+						if req.Debug {
+							req.DebugLogger.Printf("rollback update due to OnUpdate: %s", updateEventError.Error())
+						}
+
 						return updateEventError
 					}
 				}

@@ -190,8 +190,21 @@ func (c DbWrapper[T]) Migrate(object any) {
 func (c AppContext[T]) isolateDatabase(isolatedDb *gorm.DB) AppContext[T] {
 
 	result := c
-
 	result.Db.setRaw(isolatedDb)
 
 	return result
+}
+
+// a little bit of abstractions
+type TransactionProcessor[T any] func(c AppContext[T]) error
+
+func (c AppContext[T]) DbTransaction(processor TransactionProcessor[T]) error {
+
+	return c.Db.Raw().Transaction(func(tx *gorm.DB) error {
+
+		isolatedCtx := c.isolateDatabase(tx)
+		isolatedCtx.isolated = true
+
+		return processor(isolatedCtx)
+	})
 }
