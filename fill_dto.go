@@ -18,8 +18,10 @@ type DtoFieldTypeProcessor[T any] struct {
 
 var fieldTypeProcessors map[string]DtoFieldTypeProcessor[any]
 
-func RegisterFieldTypeProcessor(typeName string, processor DtoFieldTypeProcessor[any]) {
-	fieldTypeProcessors[typeName] = processor
+func RegisterFieldTypeProcessor[T any](typeName string, processor DtoFieldTypeProcessor[T]) {
+
+	converted, _ := any(processor).(DtoFieldTypeProcessor[any])
+	fieldTypeProcessors[typeName] = converted
 }
 
 func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result) (result any, err error) {
