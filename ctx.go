@@ -77,6 +77,8 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 
 	br := false
 
+	updatedFields := 0
+
 	for _, _fieldName := range m.Fillable {
 
 		if br {
@@ -131,6 +133,7 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 			} else {
 				if dtoData != nil {
 					field.Set(reflect.ValueOf(dtoData))
+					updatedFields += 1
 
 					if req.Debug {
 						req.DebugLogger.Printf("\t [%s] set `%v`", _fieldName, dtoData)
@@ -138,6 +141,11 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 				}
 			}
 		}()
+	}	
+
+
+	if (req.Debug && updatedFields == 0) {
+		req.DebugLogger.Print("no fields updated during fill , user is admin = %v", req.IsAdmin);
 	}
 
 	if m.FillExtraMethod {

@@ -516,6 +516,9 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			filterEntries = append(filterEntries, fmt.Sprintf("%s = ?", fName))
 			filterArgs = append(filterArgs, fVal)
 		}
+
+		// validate filter ? 
+
 		filterStr := strings.Join(filterEntries, " AND ")
 
 		findResult := FindFirstWhere[T](appctx.Db, filterStr, filterArgs...)
@@ -732,7 +735,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			reqData := result.RequestData(ctx)
 
 			// todo make it somewhat clear what is going on here
-			dto := gjson.Parse(fmt.Sprintf(`{"%s":true}`, result.TypeDataModel.SoftDeleteField.TableColumnName))
+			dto := gjson.Parse(fmt.Sprintf(`{"%s":true}`, result.TypeDataModel.SoftDeleteField.FillName))
 
 			fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, dto, nil, reqData)
 

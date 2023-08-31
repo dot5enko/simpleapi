@@ -50,13 +50,13 @@ func prepareFilterData[T any, CtxType any](
 	// filter soft deleted item
 	if modelDataStruct.SoftDeleteField.Has {
 		if !userAuthData.IsAdmin { // always hide softly removed items from userland, no exceptions
-			filtersMap[modelDataStruct.SoftDeleteField.TableColumnName] = false
+			filtersMap[modelDataStruct.SoftDeleteField.FillName] = false
 		} else {
 			// if admin request forcely wants to query `removed` data - no problem
-			_, removeFilterExists := filtersMap[modelDataStruct.SoftDeleteField.TableColumnName]
+			_, removeFilterExists := filtersMap[modelDataStruct.SoftDeleteField.FillName]
 			if !removeFilterExists {
 				// hide removed elements by default
-				filtersMap[modelDataStruct.SoftDeleteField.TableColumnName] = false
+				filtersMap[modelDataStruct.SoftDeleteField.FillName] = false
 			}
 		}
 	}
@@ -70,15 +70,20 @@ func prepareFilterData[T any, CtxType any](
 		if authId == nil {
 			return typed.ResultFailed[filterData](ErrNoAccess)
 		} else {
-			filtersMap[modelDataStruct.UserReferenceField.TableColumnName] = userAuthData.AuthorizedUserId
+			// now its working cause db_name == fill_name
+			// todo fix to use fll name
+			filtersMap[modelDataStruct.UserReferenceField.FillName] = userAuthData.AuthorizedUserId
 		}
 	}
 
 	for filterFieldName, filterValue := range filtersMap {
 
 		declaredFieldName, ok := modelDataStruct.ReverseFillFields[filterFieldName]
+		fieldInfo := modelDataStruct.Fields[declaredFieldName]
 
 		if !ok {
+
+			// field is not fillable
 			continue
 		}
 
@@ -110,9 +115,7 @@ func prepareFilterData[T any, CtxType any](
 
 				if supported {
 
-					fQueryCond, argVal := filterGenerator(filterFieldName, mapVal)
-
-					fieldInfo := modelDataStruct.Fields[declaredFieldName]
+					fQueryCond, argVal := filterGenerator(fieldInfo.TableColumnName, mapVal)
 
 					// convert back to gjson for simplicity of using force converting types methods
 					valj, _ := json.Marshal(argVal)
@@ -130,7 +133,7 @@ func prepareFilterData[T any, CtxType any](
 			// todo validate type
 			// expose type processor same as supported filters
 
-			parts = append(parts, fmt.Sprintf("%s = ?", filterFieldName))
+			parts = append(parts, fmt.Sprintf("%s = ?", fieldInfo.TableColumnName))
 			filterArgs = append(filterArgs, filterValue)
 		}
 	}

@@ -22,7 +22,8 @@ type ValidationRuleSet struct {
 
 type ApiTags struct {
 	Validate *string
-	Name     *string
+
+	TableColumnName string
 
 	TypeKind   reflect.Kind
 	NativeType reflect.Type
@@ -43,6 +44,8 @@ type ApiTags struct {
 	Softdelete bool
 
 	FillName *string
+	// outable name ?
+	Name     *string
 }
 
 type OnUpdateExecutor[T any] func(prev T, cur T)
@@ -52,6 +55,7 @@ type UserReferenceInfo struct {
 
 	DeclName        string
 	TableColumnName string
+	FillName string
 }
 
 type FieldsMapping struct {
@@ -154,6 +158,8 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 		declaredName := fieldData.Name
 		defName := ToSnake(declaredName)
 
+		result.TableColumnName = defName;
+
 		fillName := defName
 		// outName := defName
 
@@ -185,6 +191,8 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 
 				result.Fillable = true
 				result.FillName = &api
+
+				fillName = api
 
 				result.Outable = true
 				result.Name = &api
@@ -298,6 +306,7 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 				Has:             true,
 				DeclName:        declaredName,
 				TableColumnName: defName,
+				FillName: fillName,
 			}
 		}
 
@@ -306,6 +315,7 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 				Has:             true,
 				DeclName:        declaredName,
 				TableColumnName: defName,
+				FillName: fillName,
 			}
 		}
 
@@ -320,7 +330,6 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 
 		// fill_name -> declaredFieldName
 		objMapp.ReverseFillFields[fillName] = declaredName
-
 		objMapp.Fields[declaredName] = result
 	}
 

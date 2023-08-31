@@ -32,7 +32,8 @@ type DbWrapper[CtxType any] struct {
 	db    *gorm.DB
 	topDb *gorm.DB
 
-	app *AppContext[CtxType]
+	app   *AppContext[CtxType]
+	debug bool
 }
 
 func WrapGormDb[T any](d *gorm.DB, ctx *AppContext[T]) DbWrapper[T] {
@@ -40,6 +41,7 @@ func WrapGormDb[T any](d *gorm.DB, ctx *AppContext[T]) DbWrapper[T] {
 		db:    d,
 		topDb: d,
 		app:   ctx,
+		debug: false,
 	}
 }
 
@@ -47,6 +49,9 @@ func (d DbWrapper[CtxType]) Raw() *gorm.DB {
 	return d.db
 }
 
+func (d *DbWrapper[CtxType]) Debug(v bool) {
+	d.debug = v
+}
 func (d DbWrapper[CtxType]) CleanCopy() DbWrapper[CtxType] {
 	return WrapGormDb[CtxType](d.topDb, d.app)
 }
@@ -171,7 +176,9 @@ func SortAndFindAllWhere[T any, CtxType any](db DbWrapper[CtxType], sortByField 
 		dbQ = dbQ.Order(sortQValue)
 	}
 
-	findErr := dbQ.Where(where, whereArgs...).Find(&result).Error
+	qB := dbQ.Where(where, whereArgs...)
+
+	findErr := qB.Find(&result).Error
 
 	if findErr != nil {
 		return typed.ResultFailed[[]T](findErr)
