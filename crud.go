@@ -484,8 +484,21 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		}
 
 		if modelInfo.SoftDeleteField.Has {
-			// do not display removed items for admin
-			filter[modelInfo.SoftDeleteField.TableColumnName] = false
+			// do not display removed items for non admins
+			if !reqData.IsAdmin {
+				filter[modelInfo.SoftDeleteField.TableColumnName] = false
+			} else {
+				filtersMap := map[string]any{}
+				_filterValue := ctx.Query("filter")
+				json.Unmarshal([]byte(_filterValue), &filtersMap)
+
+				// if admin request forcely wants to query `removed` data - no problem
+				_, removeFilterExists := filtersMap[modelInfo.SoftDeleteField.FillName]
+				if !removeFilterExists {
+					// hide removed elements by default
+					filtersMap[modelInfo.SoftDeleteField.FillName] = false
+				}
+			}
 		}
 
 		// todo move to compile time
@@ -517,7 +530,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			filterArgs = append(filterArgs, fVal)
 		}
 
-		// validate filter ? 
+		// validate filter ?
 
 		filterStr := strings.Join(filterEntries, " AND ")
 
@@ -538,54 +551,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		} else {
 			modelCopy := findResult.Unwrap()
 			ctx.Set("_eobj", modelCopy)
-		}
-
-		// todo do in compile time
-		// todo remove
-		if result.passObject || result.relTypeTable != "" {
-			stored := storeObjectInContext[T](appctx, ctx)
-
-			if stored.IsOk() {
-
-				// check permission on child of owned object
-				if result.permTable != nil && result.permRelatedObjectIdGetter != nil {
-
-					c := CrudContext[T, CtxType]{
-						Crud: result,
-						App:  appctx,
-					}
-
-					modelEntity := stored.Unwrap()
-
-					rightsErr := CheckRights(c, &modelEntity, result.permRelatedObjectIdGetter, result.permTable)
-					if rightsErr != nil {
-						ctx.AbortWithStatusJSON(500, gin.H{
-							"msg": "no permission to alter object",
-							"err": rightsErr.Error(),
-						})
-						return
-					}
-				}
-
-				// permission on owned objects
-				if result.relTypeTable != "" {
-					userToObjectHasPermission := checkRole[T](appctx, ctx, result.relTypeTable)
-					if !userToObjectHasPermission {
-						ctx.AbortWithStatusJSON(500, gin.H{
-							"msg": "no permission to alter object",
-							"err": stored.UnwrapError().Error(),
-						})
-						return
-					}
-
-				}
-			} else {
-				ctx.AbortWithStatusJSON(500, gin.H{
-					"msg": "unable to store object in context",
-					"err": stored.UnwrapError().Error(),
-				})
-				return
-			}
 		}
 
 		if result.existing != nil {
