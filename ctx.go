@@ -90,10 +90,10 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 			defer func() {
 				r := recover()
 				if r != nil {
-					log.Printf("recovered error processing a field: %s: %v", _fieldName, r)
+					log.Printf("error processing a field: %s: %v", _fieldName, r)
 
 					if req.Debug {
-						req.DebugLogger.Printf("\t [%s]  error processing: %v", _fieldName, r)
+						req.DebugLogger.Printf(" [%s]  error processing: %v", _fieldName, r)
 					}
 				}
 			}()
@@ -105,7 +105,7 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 			if fieldInfo.WriteRole > 0 && fieldInfo.WriteRole != uint64(req.RoleGroup) {
 
 				if req.Debug {
-					req.DebugLogger.Printf("\t [%s] skipped filling because user nor admin not it has needed group to write this field", _fieldName)
+					req.DebugLogger.Printf(" [%s] skipped filling because user nor admin not it has needed group to write this field", _fieldName)
 				}
 
 				return
@@ -127,7 +127,7 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 				log.Printf("error processing a field: %s: %s", _fieldName, fieldProcessingErr.Error())
 
 				if req.Debug {
-					req.DebugLogger.Printf("\t [%s] error processing a field: %s", _fieldName, fieldProcessingErr.Error())
+					req.DebugLogger.Printf(" [%s] error processing a field: %s", _fieldName, fieldProcessingErr.Error())
 				}
 
 			} else {
@@ -136,16 +136,15 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 					updatedFields += 1
 
 					if req.Debug {
-						req.DebugLogger.Printf("\t [%s] set `%v`", _fieldName, dtoData)
+						req.DebugLogger.Printf(" [%s] set `%v`", _fieldName, dtoData)
 					}
 				}
 			}
 		}()
-	}	
+	}
 
-
-	if (req.Debug && updatedFields == 0) {
-		req.DebugLogger.Print("no fields updated during fill , user is admin = %v", req.IsAdmin);
+	if req.Debug && updatedFields == 0 {
+		req.DebugLogger.Printf("no fields updated during fill , user is admin = %v", req.IsAdmin)
 	}
 
 	if m.FillExtraMethod {

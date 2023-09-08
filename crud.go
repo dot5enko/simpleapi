@@ -694,51 +694,91 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		model, _ := ctx.Get("_eobj")
 		modelCopy = model.(T)
 
+		reqData := result.RequestData(ctx)
+
+		var lines *arrayLogger
+
+		if reqData.Debug {
+			reqData.DebugLogger, lines = new_debug_logger()
+		}
+
+		responseData := map[string]any{}
+		responseHttpCode := 200
+
+		defer func() {
+
+			if reqData.Debug {
+				responseData["logs"] = lines.lines
+			}
+
+			ctx.JSON(responseHttpCode, responseData)
+		}()
+
 		if result.TypeDataModel.SoftDeleteField.Has {
 			// soft removable items are not actually deleted
 
-			reqData := result.RequestData(ctx)
-
 			// todo make it somewhat clear what is going on here
-			dto := gjson.Parse(fmt.Sprintf(`{"%s":true}`, result.TypeDataModel.SoftDeleteField.FillName))
+			fname := result.TypeDataModel.SoftDeleteField.FillName
+			dto := gjson.Parse(fmt.Sprintf(`{"%s":true}`, fname))
+
+			if reqData.Debug {
+				reqData.DebugLogger.Printf("filling soft removed field : %s", fname)
+			}
 
 			fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, dto, nil, reqData)
 
 			if fillError != nil {
-				ctx.JSON(500, gin.H{
-					"msg": "fill object fields erorr",
-					"err": fillError.Error(),
-				})
+
+				responseData["msg"] = "fill object fields error"
+
+				if reqData.IsAdmin {
+					responseData["err"] = fillError.Error()
+				}
+
+				responseHttpCode = 500
+
 				return
 			}
 
 			updateErr := appctx.Db.Save(&modelCopy)
 			if updateErr != nil {
-				ctx.JSON(500, gin.H{
-					"msg": "unable to soft remove",
-					"err": updateErr.Error(),
-				})
+
+				responseHttpCode = 500
+
+				responseData["msg"] = "unable to soft remove"
+
+				if reqData.IsAdmin {
+					responseData["err"] = updateErr.Error()
+				}
+
 				return
 			} else {
-				ctx.JSON(200, gin.H{
-					"ok":  true,
-					"msg": "soft removed",
-				})
+
+				responseHttpCode = 200
+
+				responseData["ok"] = true
+				responseData["msg"] = "soft removed"
+
+				return
 			}
 
 		} else {
 
 			deleteError := appctx.Db.Delete(&modelCopy)
 			if deleteError != nil {
-				ctx.JSON(500, gin.H{
-					"msg": "unable to remove",
-					"err": deleteError.Error(),
-				})
+
+				responseHttpCode = 500
+
+				responseData["msg"] = "unable to soft remove"
+
+				if reqData.IsAdmin {
+					responseData["err"] = deleteError.Error()
+				}
+
 				return
 			} else {
-				ctx.JSON(200, gin.H{
-					"ok": true,
-				})
+				responseHttpCode = 200
+				responseData["ok"] = true
 			}
 		}
 

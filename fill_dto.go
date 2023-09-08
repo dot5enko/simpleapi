@@ -31,6 +31,10 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req Reques
 		if r != nil {
 			err = fmt.Errorf("unable to fill from dto: %s. fields available", r)
 			// br = true
+
+			if req.Debug {
+				req.DebugLogger.Printf("unable to fill from dto: %s. fields available", r)
+			}
 		}
 	}()
 
@@ -157,11 +161,16 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req Reques
 		} else {
 			dtoData = uint(uintval)
 		}
+	case reflect.Bool:
+		boolval := jsonFieldValue.Bool()
 
+		// todo validate ?
+
+		dtoData = boolval
 	default:
 
 		if req.Debug {
-			req.DebugLogger.Printf("\t [%s] field defaulted while converting from input data (json.Value), typ: %s", *fieldInfo.Name, fieldInfo.Typ)
+			req.DebugLogger.Printf(" [%s] field defaulted while converting from input data (json.Value), typ: %s", *fieldInfo.Name, fieldInfo.Typ)
 		}
 
 		processor, hasProcessor := fieldTypeProcessors[fieldInfo.Typ]
@@ -169,7 +178,7 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req Reques
 		if !hasProcessor {
 
 			if req.Debug {
-				req.DebugLogger.Printf("\t -> not found a specific processor, using .Value()")
+				req.DebugLogger.Printf(" -> not found a specific processor, using .Value()")
 			}
 
 			dtoData = jsonFieldValue.Value()
