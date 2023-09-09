@@ -247,7 +247,7 @@ func New[T any, CtxType any](crudGroup *CrudGroup[CtxType], group *gin.RouterGro
 	return &result
 }
 
-type FilterOperationHandler func(fname string, decl map[string]any) (string, any)
+type FilterOperationHandler = func(fname string, decl map[string]any) (string, any)
 
 // return "", decl["v"]
 
@@ -493,23 +493,17 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 						val = it.filterData.InputTransformer(appctx, val)
 					}
 
+					typ := reflect.TypeOf(uint64(0))
+					name := it.filterData.RelCurFieldName
+
 					fakeApiTags := ApiTags{
-						Validate:        nil,
-						TableColumnName: "",
-						TypeKind:        0,
-						NativeType:      nil,
-						Typ:             "",
-						WriteRole:       0,
-						ReadRole:        0,
-						DeclError:       false,
-						Fillable:        false,
-						Outable:         false,
-						Internal:        false,
-						UserIdFlag:      false,
-						AdminOnly:       hasAdminOnlyFiedls,
-						Softdelete:      false,
+						TableColumnName: fmt.Sprintf("%s.%s", it.filterData.RelTable, name),
+						TypeKind:        reflect.Uint64,
+						NativeType:      typ,
+						Typ:             typ.Name(),
+						Fillable:        true,
 						FillName:        nil,
-						Name:            nil,
+						Name:            &name,
 					}
 
 					processedComplexFieldSql, complexArgs, err := processFilterValueToSqlCond(val, userAuthData, it.fiedName, fakeApiTags)

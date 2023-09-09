@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"reflect"
 	"strings"
 
 	"github.com/dot5enko/typed"
@@ -62,7 +63,14 @@ func processFilterValueToSqlCond(filterValue any, userAuthData RequestData, filt
 				// convert back to gjson for simplicity of using force converting types methods
 				valj, _ := json.Marshal(argVal)
 
-				argProcessed, errProcessingFilterVal = ProcessFieldType(fieldInfo, gjson.ParseBytes(valj), userAuthData)
+				overridenField := fieldInfo
+
+				needArray := opName == "in"
+				if needArray {
+					overridenField.NativeType = reflect.SliceOf(overridenField.NativeType)
+				}
+
+				argProcessed, errProcessingFilterVal = ProcessFieldType(overridenField, gjson.ParseBytes(valj), userAuthData)
 
 				if errProcessingFilterVal == nil {
 					return

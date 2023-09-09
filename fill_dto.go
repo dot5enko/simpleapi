@@ -5,6 +5,7 @@ import (
 	"log"
 	"math"
 	"reflect"
+	"runtime"
 	"time"
 
 	"github.com/tidwall/gjson"
@@ -25,6 +26,17 @@ func RegisterFieldTypeProcessor[T any](typeName string, processor DtoFieldTypePr
 	fieldTypeProcessors[typeName] = converted
 }
 
+func stackToLog(prefix string, loggr *log.Logger) {
+
+	for i := 2; i < 15; i++ {
+		_, file, no, ok := runtime.Caller(i)
+		if ok {
+			loggr.Printf("%s %s:%d", prefix, file, no)
+		}
+	}
+
+}
+
 func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req RequestData) (result any, err error) {
 	defer func() {
 		r := recover()
@@ -33,9 +45,10 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req Reques
 			err = fmt.Errorf("unable to fill from dto: %s. fields available", r)
 			// br = true
 
-			req.log(func(logger *log.Logger) {
-				logger.Printf("unable to fill from dto: %s. fields available", r)
-			})
+			if req.Debug {
+				stackToLog(">> ", req._logger)
+			}
+			req.log_format("unable to fill from dto: %s. fields available", r)
 		}
 	}()
 
@@ -52,11 +65,28 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req Reques
 
 	var dtoData any
 
-	req.log(func(logger *log.Logger) {
-		logger.Printf(" [%s] field detected typ : %s", *fieldInfo.Name, fieldTypeKind.String())
-	})
+	req.log_format(" [%s] field detected typ : %s", *fieldInfo.Name, fieldTypeKind.String())
 
 	switch fieldTypeKind {
+	case reflect.Slice:
+
+		elementType := fieldType.Elem()
+
+		if elementType.Kind() != reflect.Uint64 {
+			req.log_format("[%s] field has unsupported array type : %s", *fieldInfo.Name, elementType)
+		} else {
+
+			result := []uint64{}
+
+			req.log_format("check input array elems to be of type %s", elementType)
+
+			for _, it := range jsonFieldValue.Array() {
+				result = append(result, it.Uint())
+			}
+
+			dtoData = result
+		}
+
 	case reflect.Struct:
 
 		if fieldInfo.Typ == "time/Time" {
@@ -170,17 +200,13 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req Reques
 		dtoData = boolval
 	default:
 
-		req.log(func(logger *log.Logger) {
-			logger.Printf(" [%s] field defaulted while converting from input data (json.Value), typ: %s", *fieldInfo.Name, fieldInfo.Typ)
-		})
+		req.log_format(" [%s] field defaulted while converting from input data (json.Value), typ: %s", *fieldInfo.Name, fieldInfo.NativeType)
 
 		processor, hasProcessor := fieldTypeProcessors[fieldInfo.Typ]
 
 		if !hasProcessor {
 
-			req.log(func(logger *log.Logger) {
-				logger.Printf(" -> not found a specific processor, using .Value()")
-			})
+			req.log_format(" -> not found a specific processor, using .Value()")
 
 			dtoData = jsonFieldValue.Value()
 		} else {
