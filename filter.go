@@ -11,8 +11,9 @@ import (
 )
 
 type complexFilter[CtxType any] struct {
-	filterData *HasManyConfig[CtxType]
 	inputValue any
+	fiedName   string
+	filterData *HasManyConfig[CtxType]
 }
 
 type filterData[CtxType any] struct {
@@ -38,6 +39,52 @@ type ListQueryParams struct {
 	SortOrder int    `form:"order"`
 	Page      int    `form:"page"`
 	PerPage   int64  `form:"per_page"`
+}
+
+func processFilterValueToSqlCond(filterValue any, userAuthData RequestData, filterFieldName string, fieldInfo ApiTags) (fQueryCond string, argProcessed any, err error) {
+	mapVal, isMap := filterValue.(map[string]any)
+
+	tableColumName := fieldInfo.TableColumnName
+
+	if isMap {
+		opName, ok := mapVal["op"].(string)
+
+		if ok {
+			filterGenerator, supported := supportedFilters[opName]
+
+			if supported {
+
+				var argVal any
+				var errProcessingFilterVal error
+
+				fQueryCond, argVal = filterGenerator(tableColumName, mapVal)
+
+				// convert back to gjson for simplicity of using force converting types methods
+				valj, _ := json.Marshal(argVal)
+
+				argProcessed, errProcessingFilterVal = ProcessFieldType(fieldInfo, gjson.ParseBytes(valj), userAuthData)
+
+				if errProcessingFilterVal == nil {
+					return
+				} else {
+					err = errProcessingFilterVal
+					return
+				}
+			} else {
+				userAuthData.log_format("filter %s for `%s` is not supported", opName, filterFieldName)
+			}
+		}
+	} else {
+
+		// todo validate type
+		// expose type processor same as supported filters
+
+		fQueryCond = fmt.Sprintf("%s = ?", tableColumName)
+		argProcessed = filterValue
+		return
+	}
+
+	return
 }
 
 func prepareFilterData[T any, CtxType any](
@@ -107,6 +154,7 @@ func prepareFilterData[T any, CtxType any](
 				complexFilters = append(complexFilters, complexFilter[CtxType]{
 					filterData: data,
 					inputValue: filterValue,
+					fiedName:   filterFieldName,
 				})
 			}
 			// field is not fillable
@@ -137,39 +185,13 @@ func prepareFilterData[T any, CtxType any](
 			}
 		}
 
-		mapVal, isMap := filterValue.(map[string]any)
+		sqlPart, sqlArg, filterProcessErr := processFilterValueToSqlCond(filterValue, userAuthData, filterFieldName, fieldInfo)
 
-		if isMap {
-
-			opName, ok := mapVal["op"].(string)
-
-			if ok {
-				filterGenerator, supported := supportedFilters[opName]
-
-				if supported {
-
-					fQueryCond, argVal := filterGenerator(fieldInfo.TableColumnName, mapVal)
-
-					// convert back to gjson for simplicity of using force converting types methods
-					valj, _ := json.Marshal(argVal)
-
-					argProcessed, errProcessingFilterVal := ProcessFieldType(fieldInfo, gjson.ParseBytes(valj), userAuthData)
-
-					if errProcessingFilterVal == nil {
-						parts = append(parts, fQueryCond)
-						filterArgs = append(filterArgs, argProcessed)
-					}
-				} else {
-					userAuthData.log_format("filter %s for `%s` is not supported", opName, filterFieldName)
-				}
-			}
+		if filterProcessErr != nil {
+			userAuthData.log_format("unable to process filter %s value: %s ", filterFieldName, filterProcessErr.Error())
 		} else {
-
-			// todo validate type
-			// expose type processor same as supported filters
-
-			parts = append(parts, fmt.Sprintf("%s = ?", fieldInfo.TableColumnName))
-			filterArgs = append(filterArgs, filterValue)
+			parts = append(parts, sqlPart)
+			filterArgs = append(filterArgs, sqlArg)
 		}
 	}
 

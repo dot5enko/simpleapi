@@ -75,25 +75,25 @@ type PagingConfig struct {
 type HasManyConfig[T any] struct {
 	FilterName string
 
-	RelTable   string
+	RelTable         string
 	RelCurFieldName  string
 	RelDestFieldName string
 	InputTransformer DataTransformer[T]
 }
 
-type DataTransformer[T any] func(ctx *AppContext[T], input any) (output any) 
+type DataTransformer[T any] func(ctx *AppContext[T], input any) (output any)
 
-func (it *CrudConfig[T, CtxType]) HasManyThrough(relTable string, dest_field, cur_field, filter_name string, inputTransformer DataTransformer[CtxType])  *CrudConfig[T, CtxType]  {
+func (it *CrudConfig[T, CtxType]) HasManyThrough(relTable string, dest_field, cur_field, filter_name string, inputTransformer DataTransformer[CtxType]) *CrudConfig[T, CtxType] {
 
 	curConf := HasManyConfig[CtxType]{
 		FilterName:       filter_name,
-		RelTable:   relTable,
+		RelTable:         relTable,
 		RelCurFieldName:  cur_field,
 		RelDestFieldName: dest_field,
 	}
 
 	it.hasManyConfig = append(it.hasManyConfig, curConf)
-	
+
 	return it
 }
 
@@ -462,6 +462,35 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		filtersSql := filterData.QueryPlaceholder
 
 		totalItems := int64(0)
+
+		// process complex filters
+
+		complexFiltersCount := len(filterData.ComplexFilters)
+		if complexFiltersCount > 0 {
+			userAuthData.log_format("processing %d complex filters ", complexFiltersCount)
+
+			for _, it := range filterData.ComplexFilters {
+
+				func() {
+
+					defer func() {
+						rec := recover()
+						if rec != nil {
+							userAuthData.log_format("unable to process complex filter for field `%s`: %s", it.fiedName, rec)
+						}
+					}()
+
+					val := it.inputValue
+
+					if it.filterData.InputTransformer != nil {
+						val = it.filterData.InputTransformer(appctx, val)
+					}
+
+				}()
+
+			}
+
+		}
 
 		// todo cache
 		appctx.Db.Raw().Model(&modelObj).Where(filtersSql, filterData.Args...).Count(&totalItems)
