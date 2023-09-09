@@ -56,6 +56,8 @@ type CrudConfig[T any, CtxType any] struct {
 
 	hasMultiple []ApiObjectRelation[T, CtxType]
 
+	hasManyConfig []HasManyConfig[CtxType]
+
 	passObject bool
 
 	// not used ?
@@ -68,6 +70,42 @@ type CrudConfig[T any, CtxType any] struct {
 
 type PagingConfig struct {
 	PerPage int
+}
+
+type HasManyConfig[T any] struct {
+	FilterName string
+
+	RelTable   string
+	RelCurFieldName  string
+	RelDestFieldName string
+	InputTransformer DataTransformer[T]
+}
+
+type DataTransformer[T any] func(ctx *AppContext[T], input any) (output any) 
+
+func (it *CrudConfig[T, CtxType]) HasManyThrough(relTable string, dest_field, cur_field, filter_name string, inputTransformer DataTransformer[CtxType])  *CrudConfig[T, CtxType]  {
+
+	curConf := HasManyConfig[CtxType]{
+		FilterName:       filter_name,
+		RelTable:   relTable,
+		RelCurFieldName:  cur_field,
+		RelDestFieldName: dest_field,
+	}
+
+	it.hasManyConfig = append(it.hasManyConfig, curConf)
+	
+	return it
+}
+
+func (it *CrudConfig[T, CtxType]) HasManyFilter(filter string) (*HasManyConfig[CtxType], bool) {
+
+	for _, it := range it.hasManyConfig {
+		if it.FilterName == filter {
+			return &it, true
+		}
+	}
+
+	return nil, false
 }
 
 func (it *CrudConfig[T, CtxType]) RequestData(g *gin.Context) RequestData {

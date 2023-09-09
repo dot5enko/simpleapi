@@ -10,10 +10,17 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-type filterData struct {
+type complexFilter[CtxType any] struct {
+	filterData *HasManyConfig[CtxType]
+	inputValue any
+}
+
+type filterData[CtxType any] struct {
 	_filter          map[string]any
 	QueryPlaceholder string
 	Args             []any
+
+	ComplexFilters []complexFilter[CtxType]
 
 	Limit   int
 	Offset  int
@@ -39,7 +46,9 @@ func prepareFilterData[T any, CtxType any](
 	modelDataStruct FieldsMapping,
 	userAuthData RequestData,
 	listQueryParams ListQueryParams,
-) typed.Result[filterData] {
+) typed.Result[filterData[CtxType]] {
+
+	complexFilters := []complexFilter[CtxType]{}
 
 	filtersSqlWithPlaceholders := ""
 
@@ -72,7 +81,7 @@ func prepareFilterData[T any, CtxType any](
 		authId := userAuthData.AuthorizedUserId
 
 		if authId == nil {
-			return typed.ResultFailed[filterData](ErrNoAccess)
+			return typed.ResultFailed[filterData[CtxType]](ErrNoAccess)
 		} else {
 			// now its working cause db_name == fill_name
 			// todo fix to use fll name
@@ -87,7 +96,19 @@ func prepareFilterData[T any, CtxType any](
 		declaredFieldName, ok := modelDataStruct.ReverseFillFields[filterFieldName]
 
 		if !ok {
-			userAuthData.log_format("field %s is not fillable, skipped", filterFieldName)
+
+			data, hasFilter := crudConfig.HasManyFilter(filterFieldName)
+
+			if !hasFilter {
+				userAuthData.log_format("field %s is not fillable, skipped", filterFieldName)
+			} else {
+				userAuthData.log_format("field %s is one to many filter, using filter data in next step", filterFieldName)
+
+				complexFilters = append(complexFilters, complexFilter[CtxType]{
+					filterData: data,
+					inputValue: filterValue,
+				})
+			}
 			// field is not fillable
 			continue
 		} else {
@@ -181,12 +202,13 @@ func prepareFilterData[T any, CtxType any](
 		}
 	}
 
-	return typed.ResultOk(filterData{
+	return typed.ResultOk(filterData[CtxType]{
 		QueryPlaceholder: filtersSqlWithPlaceholders,
 		Args:             filterArgs,
 		Limit:            limitVal,
 		Offset:           offsetVal,
 		PerPage:          int(perPageVal),
+		ComplexFilters:   complexFilters,
 		_filter:          filtersMap,
 	})
 }
