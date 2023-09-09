@@ -7,6 +7,7 @@ import (
 	"math"
 	"reflect"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dot5enko/typed"
@@ -14,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 var (
@@ -37,6 +39,8 @@ type CrudConfig[T any, CtxType any] struct {
 	Model       T
 	App         *AppContext[CtxType]
 	CrudGroup   *CrudGroup[CtxType]
+
+	tableName string
 
 	TypeDataModel FieldsMapping
 
@@ -224,11 +228,15 @@ func New[T any, CtxType any](crudGroup *CrudGroup[CtxType], group *gin.RouterGro
 
 	modelData := crudGroup.Ctx.ApiData(model)
 
+	tableInfo, _ := schema.Parse(&model, &sync.Map{}, schema.NamingStrategy{})
+
 	result := CrudConfig[T, CtxType]{
 		ParentGroup: group,
 		Model:       model,
 		App:         &crudGroup.Ctx,
 		CrudGroup:   crudGroup,
+
+		tableName: tableInfo.Table,
 
 		// todo remove
 		objectIdField:           crudGroup.Config.ObjectIdFieldName,
@@ -435,7 +443,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	group.GET("", func(ctx *gin.Context) {
 
 		var modelObj T
-		var items []T
 
 		listQueryParams := ListQueryParams{}
 		ctx.BindQuery(&listQueryParams)
@@ -469,6 +476,10 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		// process complex filters
 
+		var joinClause string = ""
+		var joinClauseArgs []any = []any{}
+		joinClauseWhereCond := ""
+
 		complexFiltersCount := len(filterData.ComplexFilters)
 		if complexFiltersCount > 0 {
 			userAuthData.log_format("processing %d complex filters ", complexFiltersCount)
@@ -494,7 +505,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 					}
 
 					typ := reflect.TypeOf(uint64(0))
-					name := it.filterData.RelCurFieldName
+					name := it.filterData.RelDestFieldName
 
 					fakeApiTags := ApiTags{
 						TableColumnName: fmt.Sprintf("%s.%s", it.filterData.RelTable, name),
@@ -511,73 +522,116 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 						userAuthData.log_format("unable to generate complex filter (%s) value :%s", it.fiedName, err.Error())
 					} else {
 						userAuthData.log_format(" -> complex filter : `%s` | [values : %v]", processedComplexFieldSql, complexArgs)
+
+						joinClauseArgs = append(joinClauseArgs, complexArgs)
+						joinClauseWhereCond = processedComplexFieldSql
+
+						joinedTblName := it.filterData.RelTable
+						curTable := result.tableName
+
+						joinClause = fmt.Sprintf("INNER JOIN %s ON %s = %s.%s", joinedTblName, it.RelFieldName(it.filterData.RelCurFieldName), curTable, result.objectIdField)
 					}
-
 				}()
-
 			}
-
 		}
 
 		// todo cache
 		appctx.Db.Raw().Model(&modelObj).Where(filtersSql, filterData.Args...).Count(&totalItems)
 		pagesCount := math.Ceil(float64(totalItems) / float64(filterData.PerPage))
 
-		SortAndFindAllWhere[T](appctx.Db,
-			listQueryParams.SortField,
-			listQueryParams.SortOrder,
-			filterData.Limit,
-			filterData.Offset,
-			filtersSql,
-			filterData.Args...).Then(func(t *[]T) *typed.Result[[]T] {
+		{
+			items := []T{}
 
-			items = *t
-
-			dtos := []any{}
-			// convert to dto objects
-
-			for _, it := range items {
-
-				// check if item has dto converter
-				// todo pass permission value
-				_dtoResult := ToDto(it, appctx, userAuthData)
-				if _dtoResult.IsOk() {
-					unwrapped := _dtoResult.Unwrap()
-					dtos = append(dtos, unwrapped)
-				} else {
-					log.Printf("unable to convert object(%#+v) to api dto : %s", it, _dtoResult.UnwrapError().Error())
-				}
+			sortOrder := "ASC"
+			if listQueryParams.SortOrder == -1 {
+				sortOrder = "DESC"
 			}
 
-			if userAuthData.Debug {
-				ctx.JSON(200, gin.H{
-					"items":       dtos,
-					"pages":       pagesCount,
-					"total_items": totalItems,
-					"logs":        userAuthData.getDebugLogs(),
+			dbQ := appctx.Db.Raw()
+
+			if filterData.Limit > 0 {
+				dbQ = dbQ.Limit(filterData.Limit)
+			}
+
+			if filterData.Offset > 0 {
+				dbQ = dbQ.Offset(filterData.Offset)
+			}
+
+			if listQueryParams.SortField != "" {
+				sortQValue := fmt.Sprintf("%s.%s %s", result.tableName, listQueryParams.SortField, sortOrder)
+				dbQ = dbQ.Order(sortQValue)
+			}
+
+			finalSQLConds := filtersSql
+			finalArgs := filterData.Args
+
+			if joinClauseWhereCond != "" {
+				finalSQLConds += " AND " + joinClauseWhereCond
+				finalArgs = append(finalArgs, joinClauseArgs...)
+
+				log.Printf("join args : %v", joinClauseArgs...)
+
+			}
+
+			// todo add field list for list request
+
+			if joinClause != "" {
+				dbQ.Joins(joinClause)
+			}
+
+			qB := dbQ.Where(finalSQLConds, finalArgs...)
+
+			userAuthData.log_format("requst SQL: %s", finalSQLConds)
+
+			findErr := qB.Find(&items).Error
+
+			if findErr != nil {
+
+				eId := uuid.NewString()
+
+				log.Printf("db err : %s: %s", eId, findErr.Error())
+
+				ctx.AbortWithStatusJSON(404, gin.H{
+					"msg": "db err",
+					"id":  eId,
 				})
+				return
 			} else {
-				ctx.JSON(200, gin.H{
-					"items":       dtos,
-					"pages":       pagesCount,
-					"total_items": totalItems,
-				})
+
+				dtos := []any{}
+				// convert to dto objects
+
+				for _, it := range items {
+
+					// check if item has dto converter
+					// todo pass permission value
+					_dtoResult := ToDto(it, appctx, userAuthData)
+					if _dtoResult.IsOk() {
+						unwrapped := _dtoResult.Unwrap()
+						dtos = append(dtos, unwrapped)
+					} else {
+						log.Printf("unable to convert object(%#+v) to api dto : %s", it, _dtoResult.UnwrapError().Error())
+					}
+				}
+
+				if userAuthData.Debug {
+					ctx.JSON(200, gin.H{
+						"items":       dtos,
+						"pages":       pagesCount,
+						"total_items": totalItems,
+						"logs":        userAuthData.getDebugLogs(),
+					})
+				} else {
+					ctx.JSON(200, gin.H{
+						"items":       dtos,
+						"pages":       pagesCount,
+						"total_items": totalItems,
+					})
+				}
+
+				return
 			}
-
-			return nil
-		}).Fail(func(e error) {
-
-			eId := uuid.NewString()
-
-			log.Printf("db err : %s: %s", eId, e.Error())
-
-			ctx.AbortWithStatusJSON(404, gin.H{
-				"msg": "db err",
-				"id":  eId,
-			})
-			return
-		})
-
+		}
 	})
 
 	existingItems := group.Group("/:id")

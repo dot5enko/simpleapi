@@ -17,6 +17,10 @@ type complexFilter[CtxType any] struct {
 	filterData *HasManyConfig[CtxType]
 }
 
+func (c complexFilter[T]) RelFieldName(name string) string {
+	return fmt.Sprintf("%s.%s", c.filterData.RelTable, name)
+}
+
 type filterData[CtxType any] struct {
 	_filter          map[string]any
 	QueryPlaceholder string
