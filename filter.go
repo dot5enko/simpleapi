@@ -123,21 +123,29 @@ func prepareFilterData[T any, CtxType any](
 	parts := []string{}
 	filterArgs := []any{}
 
+	softdeleteField := ""
+	keepSoftDeleted := false
+
 	// filter soft deleted item
 	if modelDataStruct.SoftDeleteField.Has {
 		if !userAuthData.IsAdmin { // always hide softly removed items from userland, no exceptions
 			filtersMap[modelDataStruct.SoftDeleteField.FillName] = false
+			softdeleteField = modelDataStruct.SoftDeleteField.FillName
+			keepSoftDeleted = true
 		} else {
 			// if admin request forcely wants to query `removed` data - no problem
 			_, removeFilterExists := filtersMap[modelDataStruct.SoftDeleteField.FillName]
 			if !removeFilterExists {
 				// hide removed elements by default
 				filtersMap[modelDataStruct.SoftDeleteField.FillName] = false
+				keepSoftDeleted = true
 			}
 
 			userAuthData.log_format(" softremoved `%s` set to `%v`", modelDataStruct.SoftDeleteField.FillName, filtersMap[modelDataStruct.SoftDeleteField.FillName])
-
 		}
+	} else {
+		log.Printf("HAS NOT softdeleted field")
+
 	}
 
 	// override user related fields to current auth user if its not an admin
@@ -186,10 +194,21 @@ func prepareFilterData[T any, CtxType any](
 
 		// allow only whitelisted fields
 		if !userAuthData.IsAdmin {
-			_, canBeFiltered := modelDataStruct.Filterable[filterFieldName]
 
-			if !canBeFiltered {
-				continue
+			cont := false
+
+			if softdeleteField == filterFieldName {
+				if keepSoftDeleted {
+					cont = true
+				}
+
+			}
+
+			if !cont {
+				_, canBeFiltered := modelDataStruct.Filterable[filterFieldName]
+				if !canBeFiltered {
+					continue
+				}
 			}
 		}
 

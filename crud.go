@@ -122,13 +122,21 @@ func (it *CrudConfig[T, CtxType]) RequestData(g *gin.Context) RequestData {
 	}
 
 	if it.CrudGroup.Config.RequestDataGenerator == nil {
+
+		log.Printf("request data generator is NULL")
+
 		return RequestData{
 			IsAdmin:          false,
 			RoleGroup:        0,
 			AuthorizedUserId: nil,
 		}
 	} else {
+
+		
+
 		generated := it.CrudGroup.Config.RequestDataGenerator(g, ctx)
+
+		log.Printf("request data generator is OK: %#+v",generated)
 
 		if generated.Debug {
 			// init logger
@@ -934,6 +942,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	})
 
 	existingItems.GET("", func(ctx *gin.Context) {
+
+		
 
 		reqData := result.RequestData(ctx)
 
