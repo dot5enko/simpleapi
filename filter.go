@@ -46,7 +46,7 @@ type ListQueryParams struct {
 	PerPage   int64  `form:"per_page"`
 }
 
-func processFilterValueToSqlCond(filterValue any, userAuthData RequestData, filterFieldName string, fieldInfo ApiTags) (fQueryCond string, argProcessed any, err error) {
+func processFilterValueToSqlCond(tableName string, filterValue any, userAuthData RequestData, filterFieldName string, fieldInfo ApiTags) (fQueryCond string, argProcessed any, err error) {
 	mapVal, isMap := filterValue.(map[string]any)
 
 	tableColumName := fieldInfo.TableColumnName
@@ -62,7 +62,13 @@ func processFilterValueToSqlCond(filterValue any, userAuthData RequestData, filt
 				var argVal any
 				var errProcessingFilterVal error
 
-				fQueryCond, argVal = filterGenerator(tableColumName, mapVal)
+				fname := tableColumName
+
+				if tableName != "" {
+					fname = fmt.Sprintf("%s.%s", tableName, tableColumName)
+				}
+
+				fQueryCond, argVal = filterGenerator(fname, mapVal)
 
 				// convert back to gjson for simplicity of using force converting types methods
 				valj, _ := json.Marshal(argVal)
@@ -198,7 +204,7 @@ func prepareFilterData[T any, CtxType any](
 			}
 		}
 
-		sqlPart, sqlArg, filterProcessErr := processFilterValueToSqlCond(filterValue, userAuthData, filterFieldName, fieldInfo)
+		sqlPart, sqlArg, filterProcessErr := processFilterValueToSqlCond(crudConfig.tableName, filterValue, userAuthData, filterFieldName, fieldInfo)
 
 		if filterProcessErr != nil {
 			userAuthData.log_format("unable to process filter %s value: %s ", filterFieldName, filterProcessErr.Error())

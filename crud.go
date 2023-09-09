@@ -517,12 +517,10 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 						Name:            &name,
 					}
 
-					processedComplexFieldSql, complexArgs, err := processFilterValueToSqlCond(val, userAuthData, it.fiedName, fakeApiTags)
+					processedComplexFieldSql, complexArgs, err := processFilterValueToSqlCond("", val, userAuthData, it.fiedName, fakeApiTags)
 					if err != nil {
 						userAuthData.log_format("unable to generate complex filter (%s) value :%s", it.fiedName, err.Error())
 					} else {
-						userAuthData.log_format(" -> complex filter : `%s` | [values : %v]", processedComplexFieldSql, complexArgs)
-
 						joinClauseArgs = append(joinClauseArgs, complexArgs)
 						joinClauseWhereCond = processedComplexFieldSql
 
@@ -568,9 +566,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			if joinClauseWhereCond != "" {
 				finalSQLConds += " AND " + joinClauseWhereCond
 				finalArgs = append(finalArgs, joinClauseArgs...)
-
-				log.Printf("join args : %v", joinClauseArgs...)
-
 			}
 
 			// todo add field list for list request
