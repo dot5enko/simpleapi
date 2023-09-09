@@ -37,6 +37,14 @@ func (r *RequestData) init_debug_logger() {
 	}
 }
 
+func (r *RequestData) DebugLogs() []string {
+	return r.getDebugLogs()
+}
+
+func (r *RequestData) InitLogger() {
+	r.init_debug_logger()
+}
+
 func (r *RequestData) getDebugLogs() []string {
 	if r.Debug {
 		return r._rawDebugLogger.lines
@@ -49,6 +57,16 @@ func (r *RequestData) log(cb func(logger *log.Logger)) {
 
 	if r.Debug {
 		cb(r._logger)
+	}
+}
+
+func (r *RequestData) log_format(format string, args ...any) {
+	if r.Debug {
+		if len(args) == 0 {
+			r._logger.Print(format)
+		} else {
+			r._logger.Printf(format, args...)
+		}
 	}
 }
 

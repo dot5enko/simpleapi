@@ -60,9 +60,7 @@ func prepareFilterData[T any, CtxType any](
 				filtersMap[modelDataStruct.SoftDeleteField.FillName] = false
 			}
 
-			userAuthData.log(func(logger *log.Logger) {
-				logger.Printf(" softremoved `%s` set to `%v`", modelDataStruct.SoftDeleteField.FillName, filtersMap[modelDataStruct.SoftDeleteField.FillName])
-			})
+			userAuthData.log_format(" softremoved `%s` set to `%v`", modelDataStruct.SoftDeleteField.FillName, filtersMap[modelDataStruct.SoftDeleteField.FillName])
 
 		}
 	}
@@ -81,9 +79,7 @@ func prepareFilterData[T any, CtxType any](
 			filtersMap[modelDataStruct.UserReferenceField.FillName] = userAuthData.AuthorizedUserId
 		}
 
-		userAuthData.log(func(logger *log.Logger) {
-			logger.Printf(" user reference field `%s` set to `%v`", modelDataStruct.UserReferenceField.FillName, filtersMap[modelDataStruct.UserReferenceField.FillName])
-		})
+		userAuthData.log_format(" user reference field `%s` set to `%v`", modelDataStruct.UserReferenceField.FillName, filtersMap[modelDataStruct.UserReferenceField.FillName])
 	}
 
 	for filterFieldName, filterValue := range filtersMap {
@@ -91,15 +87,11 @@ func prepareFilterData[T any, CtxType any](
 		declaredFieldName, ok := modelDataStruct.ReverseFillFields[filterFieldName]
 
 		if !ok {
-			userAuthData.log(func(logger *log.Logger) {
-				logger.Printf("field %s is not fillable, skipped", filterFieldName)
-			})
+			userAuthData.log_format("field %s is not fillable, skipped", filterFieldName)
 			// field is not fillable
 			continue
 		} else {
-			userAuthData.log(func(logger *log.Logger) {
-				logger.Printf("field %s is filterable", filterFieldName)
-			})
+			userAuthData.log_format("field %s is filterable", filterFieldName)
 		}
 
 		fieldInfo := modelDataStruct.Fields[declaredFieldName]
@@ -118,9 +110,7 @@ func prepareFilterData[T any, CtxType any](
 			_, disabled := crudConfig.disableFilterOverFields[filterFieldName]
 			if disabled {
 
-				userAuthData.log(func(logger *log.Logger) {
-					logger.Printf("filter by %s is disabled by conf", filterFieldName)
-				})
+				userAuthData.log_format("filter by %s is disabled by conf", filterFieldName)
 
 				continue
 			}
@@ -149,9 +139,7 @@ func prepareFilterData[T any, CtxType any](
 						filterArgs = append(filterArgs, argProcessed)
 					}
 				} else {
-					userAuthData.log(func(logger *log.Logger) {
-						logger.Printf("filter %s for `%s` is not supported", opName, filterFieldName)
-					})
+					userAuthData.log_format("filter %s for `%s` is not supported", opName, filterFieldName)
 				}
 			}
 		} else {

@@ -408,10 +408,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		_filterValue := ctx.Query("filter")
 		json.Unmarshal([]byte(_filterValue), &filtersMap)
 
-		userAuthData.log(func(loggger *log.Logger) {
-			loggger.Printf("filter input data : %s", _filterValue)
-		})
-
 		filterCompiled := prepareFilterData[T, CtxType](filtersMap, result, modelDataStruct, userAuthData, listQueryParams)
 
 		if !filterCompiled.IsOk() {
