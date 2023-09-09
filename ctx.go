@@ -25,8 +25,31 @@ type RequestData struct {
 	RoleGroup        uint8
 	AuthorizedUserId any // todo use generic type
 
-	Debug       bool
-	DebugLogger *log.Logger
+	Debug bool
+
+	_logger         *log.Logger
+	_rawDebugLogger *arrayLogger
+}
+
+func (r *RequestData) init_debug_logger() {
+	if r._logger == nil {
+		r._logger, r._rawDebugLogger = new_debug_logger()
+	}
+}
+
+func (r *RequestData) getDebugLogs() []string {
+	if r.Debug {
+		return r._rawDebugLogger.lines
+	} else {
+		return []string{}
+	}
+}
+
+func (r *RequestData) log(cb func(logger *log.Logger)) {
+
+	if r.Debug {
+		cb(r._logger)
+	}
 }
 
 type AppContext[T any] struct {
@@ -92,9 +115,9 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 				if r != nil {
 					log.Printf("error processing a field: %s: %v", _fieldName, r)
 
-					if req.Debug {
-						req.DebugLogger.Printf(" [%s]  error processing: %v", _fieldName, r)
-					}
+					req.log(func(loggger *log.Logger) {
+						loggger.Printf(" [%s]  error processing: %v", _fieldName, r)
+					})
 				}
 			}()
 
@@ -104,9 +127,9 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 			// make groups inheritance, etc
 			if fieldInfo.WriteRole > 0 && fieldInfo.WriteRole != uint64(req.RoleGroup) {
 
-				if req.Debug {
-					req.DebugLogger.Printf(" [%s] skipped filling because user nor admin not it has needed group to write this field", _fieldName)
-				}
+				req.log(func(logger *log.Logger) {
+					logger.Printf(" [%s] skipped filling because user nor admin not it has needed group to write this field", _fieldName)
+				})
 
 				return
 			}
@@ -127,7 +150,9 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 				log.Printf("error processing a field: %s: %s", _fieldName, fieldProcessingErr.Error())
 
 				if req.Debug {
-					req.DebugLogger.Printf(" [%s] error processing a field: %s", _fieldName, fieldProcessingErr.Error())
+					req.log(func(logger *log.Logger) {
+						logger.Printf(" [%s] error processing a field: %s", _fieldName, fieldProcessingErr.Error())
+					})
 				}
 
 			} else {
@@ -135,23 +160,25 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 					field.Set(reflect.ValueOf(dtoData))
 					updatedFields += 1
 
-					if req.Debug {
-						req.DebugLogger.Printf(" [%s] set `%v`", _fieldName, dtoData)
-					}
+					req.log(func(logger *log.Logger) {
+						logger.Printf(" [%s] set `%v`", _fieldName, dtoData)
+					})
 				}
 			}
 		}()
 	}
 
-	if req.Debug && updatedFields == 0 {
-		req.DebugLogger.Printf("no fields updated during fill , user is admin = %v", req.IsAdmin)
+	if updatedFields == 0 {
+		req.log(func(logger *log.Logger) {
+			logger.Printf("no fields updated during fill , user is admin = %v", req.IsAdmin)
+		})
 	}
 
 	if m.FillExtraMethod {
 
-		if req.Debug {
-			req.DebugLogger.Printf(" has fill extra method, processing")
-		}
+		req.log(func(logger *log.Logger) {
+			logger.Printf(" has fill extra method, processing")
+		})
 
 		modelFillable, _ := any(obj).(ApiDtoFillable[T])
 

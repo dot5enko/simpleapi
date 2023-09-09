@@ -2,6 +2,7 @@ package simpleapi
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"reflect"
 	"time"
@@ -32,9 +33,9 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req Reques
 			err = fmt.Errorf("unable to fill from dto: %s. fields available", r)
 			// br = true
 
-			if req.Debug {
-				req.DebugLogger.Printf("unable to fill from dto: %s. fields available", r)
-			}
+			req.log(func(logger *log.Logger) {
+				logger.Printf("unable to fill from dto: %s. fields available", r)
+			})
 		}
 	}()
 
@@ -51,9 +52,9 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req Reques
 
 	var dtoData any
 
-	if req.Debug {
-		req.DebugLogger.Printf(" [%s] field detected typ : %s", *fieldInfo.Name, fieldTypeKind.String())
-	}
+	req.log(func(logger *log.Logger) {
+		logger.Printf(" [%s] field detected typ : %s", *fieldInfo.Name, fieldTypeKind.String())
+	})
 
 	switch fieldTypeKind {
 	case reflect.Struct:
@@ -169,17 +170,17 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req Reques
 		dtoData = boolval
 	default:
 
-		if req.Debug {
-			req.DebugLogger.Printf(" [%s] field defaulted while converting from input data (json.Value), typ: %s", *fieldInfo.Name, fieldInfo.Typ)
-		}
+		req.log(func(logger *log.Logger) {
+			logger.Printf(" [%s] field defaulted while converting from input data (json.Value), typ: %s", *fieldInfo.Name, fieldInfo.Typ)
+		})
 
 		processor, hasProcessor := fieldTypeProcessors[fieldInfo.Typ]
 
 		if !hasProcessor {
 
-			if req.Debug {
-				req.DebugLogger.Printf(" -> not found a specific processor, using .Value()")
-			}
+			req.log(func(logger *log.Logger) {
+				logger.Printf(" -> not found a specific processor, using .Value()")
+			})
 
 			dtoData = jsonFieldValue.Value()
 		} else {

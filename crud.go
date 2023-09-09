@@ -85,7 +85,14 @@ func (it *CrudConfig[T, CtxType]) RequestData(g *gin.Context) RequestData {
 			AuthorizedUserId: nil,
 		}
 	} else {
-		return it.CrudGroup.Config.RequestDataGenerator(g, ctx)
+		generated := it.CrudGroup.Config.RequestDataGenerator(g, ctx)
+
+		if generated.Debug {
+			// init logger
+			generated.init_debug_logger()
+		}
+
+		return generated
 	}
 }
 
@@ -401,6 +408,10 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		_filterValue := ctx.Query("filter")
 		json.Unmarshal([]byte(_filterValue), &filtersMap)
 
+		userAuthData.log(func(loggger *log.Logger) {
+			loggger.Printf("filter input data : %s", _filterValue)
+		})
+
 		filterCompiled := prepareFilterData[T, CtxType](filtersMap, result, modelDataStruct, userAuthData, listQueryParams)
 
 		if !filterCompiled.IsOk() {
@@ -448,11 +459,20 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				}
 			}
 
-			ctx.JSON(200, gin.H{
-				"items":       dtos,
-				"pages":       pagesCount,
-				"total_items": totalItems,
-			})
+			if userAuthData.Debug {
+				ctx.JSON(200, gin.H{
+					"items":       dtos,
+					"pages":       pagesCount,
+					"total_items": totalItems,
+					"logs":        userAuthData.getDebugLogs(),
+				})
+			} else {
+				ctx.JSON(200, gin.H{
+					"items":       dtos,
+					"pages":       pagesCount,
+					"total_items": totalItems,
+				})
+			}
 
 			return nil
 		}).Fail(func(e error) {
@@ -595,10 +615,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		var debugLogs *arrayLogger
 
-		if req.Debug {
-			req.DebugLogger, debugLogs = new_debug_logger()
-		}
-
 		fillError := appctx.FillEntityFromDto(result.TypeDataModel, ref, parsed, nil, req)
 
 		if fillError != nil {
@@ -621,32 +637,32 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 				fieldsData := result.TypeDataModel
 
-				if req.Debug {
-					req.DebugLogger.Printf("saved succesfully")
-				}
+				req.log(func(logger *log.Logger) {
+					logger.Printf("saved succesfully")
+				})
 
 				if fieldsData.UpdateExtraMethod {
 
-					if req.Debug {
-						req.DebugLogger.Printf("processing extra update method for entity")
-					}
+					req.log(func(logger *log.Logger) {
+						logger.Printf("processing extra update method for entity")
+					})
 
 					objUpdater, _ := any(ref).(OnUpdateEventHandler[CtxType, T])
 					updateEventError := objUpdater.OnUpdate(&isolatedContext, modelCopy)
 					if updateEventError != nil {
 
-						if req.Debug {
-							req.DebugLogger.Printf("rollback update due to OnUpdate: %s", updateEventError.Error())
-						}
+						req.log(func(logger *log.Logger) {
+							logger.Printf("rollback update due to OnUpdate: %s", updateEventError.Error())
+						})
 
 						return updateEventError
 					}
 				}
 			} else {
 
-				if req.Debug {
-					req.DebugLogger.Printf("got an error while saving item")
-				}
+				req.log(func(logger *log.Logger) {
+					logger.Printf("got an error while saving item")
+				})
 
 			}
 
@@ -696,19 +712,13 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		reqData := result.RequestData(ctx)
 
-		var lines *arrayLogger
-
-		if reqData.Debug {
-			reqData.DebugLogger, lines = new_debug_logger()
-		}
-
 		responseData := map[string]any{}
 		responseHttpCode := 200
 
 		defer func() {
 
 			if reqData.Debug {
-				responseData["logs"] = lines.lines
+				responseData["logs"] = reqData.getDebugLogs()
 			}
 
 			ctx.JSON(responseHttpCode, responseData)
@@ -721,9 +731,9 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			fname := result.TypeDataModel.SoftDeleteField.FillName
 			dto := gjson.Parse(fmt.Sprintf(`{"%s":true}`, fname))
 
-			if reqData.Debug {
-				reqData.DebugLogger.Printf("filling soft removed field : %s", fname)
-			}
+			reqData.log(func(logger *log.Logger) {
+				logger.Printf("filling soft removed field : %s", fname)
+			})
 
 			fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, dto, nil, reqData)
 

@@ -3,6 +3,7 @@ package simpleapi
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/dot5enko/typed"
@@ -58,6 +59,11 @@ func prepareFilterData[T any, CtxType any](
 				// hide removed elements by default
 				filtersMap[modelDataStruct.SoftDeleteField.FillName] = false
 			}
+
+			userAuthData.log(func(logger *log.Logger) {
+				logger.Printf(" softremoved `%s` set to `%v`", modelDataStruct.SoftDeleteField.FillName, filtersMap[modelDataStruct.SoftDeleteField.FillName])
+			})
+
 		}
 	}
 
@@ -74,18 +80,29 @@ func prepareFilterData[T any, CtxType any](
 			// todo fix to use fll name
 			filtersMap[modelDataStruct.UserReferenceField.FillName] = userAuthData.AuthorizedUserId
 		}
+
+		userAuthData.log(func(logger *log.Logger) {
+			logger.Printf(" user reference field `%s` set to `%v`", modelDataStruct.UserReferenceField.FillName, filtersMap[modelDataStruct.UserReferenceField.FillName])
+		})
 	}
 
 	for filterFieldName, filterValue := range filtersMap {
 
 		declaredFieldName, ok := modelDataStruct.ReverseFillFields[filterFieldName]
-		fieldInfo := modelDataStruct.Fields[declaredFieldName]
 
 		if !ok {
-
+			userAuthData.log(func(logger *log.Logger) {
+				logger.Printf("field %s is not fillable, skipped", filterFieldName)
+			})
 			// field is not fillable
 			continue
+		} else {
+			userAuthData.log(func(logger *log.Logger) {
+				logger.Printf("field %s is filterable", filterFieldName)
+			})
 		}
+
+		fieldInfo := modelDataStruct.Fields[declaredFieldName]
 
 		// allow only whitelisted fields
 		if !userAuthData.IsAdmin {
@@ -100,6 +117,11 @@ func prepareFilterData[T any, CtxType any](
 		if hasDisabledFields {
 			_, disabled := crudConfig.disableFilterOverFields[filterFieldName]
 			if disabled {
+
+				userAuthData.log(func(logger *log.Logger) {
+					logger.Printf("filter by %s is disabled by conf", filterFieldName)
+				})
+
 				continue
 			}
 		}
@@ -126,6 +148,10 @@ func prepareFilterData[T any, CtxType any](
 						parts = append(parts, fQueryCond)
 						filterArgs = append(filterArgs, argProcessed)
 					}
+				} else {
+					userAuthData.log(func(logger *log.Logger) {
+						logger.Printf("filter %s for `%s` is not supported", opName, filterFieldName)
+					})
 				}
 			}
 		} else {
@@ -139,6 +165,11 @@ func prepareFilterData[T any, CtxType any](
 	}
 
 	filtersSqlWithPlaceholders = strings.Join(parts, " AND ")
+
+	userAuthData.log(func(logger *log.Logger) {
+		logger.Print("filter SQL:")
+		logger.Printf("`%s` + args %v", filtersSqlWithPlaceholders, filterArgs)
+	})
 
 	curPage := listQueryParams.Page
 	if curPage <= 0 {
