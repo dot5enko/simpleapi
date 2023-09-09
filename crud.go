@@ -122,9 +122,6 @@ func (it *CrudConfig[T, CtxType]) RequestData(g *gin.Context) RequestData {
 	}
 
 	if it.CrudGroup.Config.RequestDataGenerator == nil {
-
-		log.Printf("request data generator is NULL")
-
 		return RequestData{
 			IsAdmin:          false,
 			RoleGroup:        0,
@@ -132,11 +129,7 @@ func (it *CrudConfig[T, CtxType]) RequestData(g *gin.Context) RequestData {
 		}
 	} else {
 
-		
-
 		generated := it.CrudGroup.Config.RequestDataGenerator(g, ctx)
-
-		log.Printf("request data generator is OK: %#+v",generated)
 
 		if generated.Debug {
 			// init logger

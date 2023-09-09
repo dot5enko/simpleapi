@@ -45,7 +45,7 @@ type ApiTags struct {
 
 	FillName *string
 	// outable name ?
-	Name     *string
+	Name *string
 }
 
 type OnUpdateExecutor[T any] func(prev T, cur T)
@@ -55,7 +55,7 @@ type UserReferenceInfo struct {
 
 	DeclName        string
 	TableColumnName string
-	FillName string
+	FillName        string
 }
 
 type FieldsMapping struct {
@@ -158,7 +158,7 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 		declaredName := fieldData.Name
 		defName := ToSnake(declaredName)
 
-		result.TableColumnName = defName;
+		result.TableColumnName = defName
 
 		fillName := defName
 		// outName := defName
@@ -306,7 +306,7 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 				Has:             true,
 				DeclName:        declaredName,
 				TableColumnName: defName,
-				FillName: fillName,
+				FillName:        fillName,
 			}
 		}
 
@@ -315,7 +315,7 @@ func GetFieldTags[CtxType any, T any](obj any) (objMapp FieldsMapping) {
 				Has:             true,
 				DeclName:        declaredName,
 				TableColumnName: defName,
-				FillName: fillName,
+				FillName:        fillName,
 			}
 		}
 
