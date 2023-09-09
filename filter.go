@@ -71,7 +71,8 @@ func processFilterValueToSqlCond(filterValue any, userAuthData RequestData, filt
 					return
 				}
 			} else {
-				userAuthData.log_format("filter %s for `%s` is not supported", opName, filterFieldName)
+				err = fmt.Errorf("filter %s for `%s` is not supported", opName, filterFieldName)
+				return
 			}
 		}
 	} else {

@@ -90,6 +90,7 @@ func (it *CrudConfig[T, CtxType]) HasManyThrough(relTable string, dest_field, cu
 		RelTable:         relTable,
 		RelCurFieldName:  cur_field,
 		RelDestFieldName: dest_field,
+		InputTransformer: inputTransformer,
 	}
 
 	it.hasManyConfig = append(it.hasManyConfig, curConf)
@@ -262,6 +263,9 @@ var supportedFilters = map[string]FilterOperationHandler{
 	},
 	"lte": func(fname string, decl map[string]any) (string, any) {
 		return fmt.Sprintf("%s <= ?", fname), decl["v"]
+	},
+	"in": func(fname string, decl map[string]any) (string, any) {
+		return fmt.Sprintf("%s IN ?", fname), decl["v"]
 	},
 }
 
@@ -471,6 +475,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 			for _, it := range filterData.ComplexFilters {
 
+				userAuthData.log_format("processing filter for %s", it.fiedName)
+
 				func() {
 
 					defer func() {
@@ -483,7 +489,34 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 					val := it.inputValue
 
 					if it.filterData.InputTransformer != nil {
+						userAuthData.log_format(" filter has input transformer, applying...")
 						val = it.filterData.InputTransformer(appctx, val)
+					}
+
+					fakeApiTags := ApiTags{
+						Validate:        nil,
+						TableColumnName: "",
+						TypeKind:        0,
+						NativeType:      nil,
+						Typ:             "",
+						WriteRole:       0,
+						ReadRole:        0,
+						DeclError:       false,
+						Fillable:        false,
+						Outable:         false,
+						Internal:        false,
+						UserIdFlag:      false,
+						AdminOnly:       hasAdminOnlyFiedls,
+						Softdelete:      false,
+						FillName:        nil,
+						Name:            nil,
+					}
+
+					processedComplexFieldSql, complexArgs, err := processFilterValueToSqlCond(val, userAuthData, it.fiedName, fakeApiTags)
+					if err != nil {
+						userAuthData.log_format("unable to generate complex filter (%s) value :%s", it.fiedName, err.Error())
+					} else {
+						userAuthData.log_format(" -> complex filter : `%s` | [values : %v]", processedComplexFieldSql, complexArgs)
 					}
 
 				}()
