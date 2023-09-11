@@ -40,7 +40,8 @@ type CrudConfig[T any, CtxType any] struct {
 	App         *AppContext[CtxType]
 	CrudGroup   *CrudGroup[CtxType]
 
-	tableName string
+	tableName       string
+	primaryIdDbName string
 
 	TypeDataModel FieldsMapping
 
@@ -229,7 +230,14 @@ func New[T any, CtxType any](crudGroup *CrudGroup[CtxType], group *gin.RouterGro
 
 	modelData := crudGroup.Ctx.ApiData(model)
 
+	// this is done only on setup, so we dont care on resources and speed here
 	tableInfo, _ := schema.Parse(&model, &sync.Map{}, schema.NamingStrategy{})
+
+	if len(tableInfo.PrimaryFields) != 1 {
+		panic("there should be exactly one primary key per entity. other states not supported :(")
+	}
+
+	primaryField := tableInfo.PrimaryFields[0]
 
 	result := CrudConfig[T, CtxType]{
 		ParentGroup: group,
@@ -237,7 +245,8 @@ func New[T any, CtxType any](crudGroup *CrudGroup[CtxType], group *gin.RouterGro
 		App:         &crudGroup.Ctx,
 		CrudGroup:   crudGroup,
 
-		tableName: tableInfo.Table,
+		tableName:       tableInfo.Table,
+		primaryIdDbName: primaryField.DBName,
 
 		// todo remove
 		objectIdField:           crudGroup.Config.ObjectIdFieldName,
@@ -443,8 +452,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	// get list
 	group.GET("", func(ctx *gin.Context) {
 
-		var modelObj T
-
 		listQueryParams := ListQueryParams{}
 		ctx.BindQuery(&listQueryParams)
 
@@ -534,32 +541,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			}
 		}
 
-		// todo cache
-		appctx.Db.Raw().Model(&modelObj).Where(filtersSql, filterData.Args...).Count(&totalItems)
-		pagesCount := math.Ceil(float64(totalItems) / float64(filterData.PerPage))
-
 		{
-			items := []T{}
-
-			sortOrder := "ASC"
-			if listQueryParams.SortOrder == -1 {
-				sortOrder = "DESC"
-			}
-
 			dbQ := appctx.Db.Raw()
-
-			if filterData.Limit > 0 {
-				dbQ = dbQ.Limit(filterData.Limit)
-			}
-
-			if filterData.Offset > 0 {
-				dbQ = dbQ.Offset(filterData.Offset)
-			}
-
-			if listQueryParams.SortField != "" {
-				sortQValue := fmt.Sprintf("%s.%s %s", result.tableName, listQueryParams.SortField, sortOrder)
-				dbQ = dbQ.Order(sortQValue)
-			}
 
 			finalSQLConds := filtersSql
 			finalArgs := filterData.Args
@@ -571,15 +554,42 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 			// todo add field list for list request
 
+			qB := dbQ.Where(finalSQLConds, finalArgs...)
+			countQuery := appctx.Db.Raw().Table(result.tableName).Where(finalSQLConds, finalArgs...)
+
 			if joinClause != "" {
-				dbQ.Joins(joinClause)
+				qB = qB.Joins(joinClause)
+				countQuery = countQuery.Joins(joinClause)
 			}
 
-			qB := dbQ.Where(finalSQLConds, finalArgs...)
+			// todo cache
+			idField := fmt.Sprintf("%s.%s", result.tableName, result.primaryIdDbName)
+
+			countQuery.Distinct(idField).Count(&totalItems)
+			pagesCount := math.Ceil(float64(totalItems) / float64(filterData.PerPage))
 
 			userAuthData.log_format("requst SQL: %s", finalSQLConds)
 
-			findErr := qB.Find(&items).Error
+			sortOrder := "ASC"
+			if listQueryParams.SortOrder == -1 {
+				sortOrder = "DESC"
+			}
+
+			if filterData.Limit > 0 {
+				qB = qB.Limit(filterData.Limit)
+			}
+
+			if filterData.Offset > 0 {
+				qB = qB.Offset(filterData.Offset)
+			}
+
+			if listQueryParams.SortField != "" {
+				sortQValue := fmt.Sprintf("%s.%s %s", result.tableName, listQueryParams.SortField, sortOrder)
+				qB = qB.Order(sortQValue)
+			}
+
+			itemIds := map[string]any{}
+			findErr := qB.Table(result.tableName).Distinct(idField).Find(&itemIds).Error
 
 			if findErr != nil {
 
@@ -594,35 +604,57 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				return
 			} else {
 
-				dtos := []any{}
-				// convert to dto objects
+				log.Printf("got item ids : %v", itemIds)
 
-				for _, it := range items {
+				var items []T
 
-					// check if item has dto converter
-					// todo pass permission value
-					_dtoResult := ToDto(it, appctx, userAuthData)
-					if _dtoResult.IsOk() {
-						unwrapped := _dtoResult.Unwrap()
-						dtos = append(dtos, unwrapped)
-					} else {
-						log.Printf("unable to convert object(%#+v) to api dto : %s", it, _dtoResult.UnwrapError().Error())
-					}
+				ids := []any{}
+				for _, v := range itemIds {
+					ids = append(ids, v)
 				}
 
-				if userAuthData.Debug {
-					ctx.JSON(200, gin.H{
-						"items":       dtos,
-						"pages":       pagesCount,
-						"total_items": totalItems,
-						"logs":        userAuthData.getDebugLogs(),
+				errFindByIds := appctx.Db.Raw().Find(&items, fmt.Sprintf("%s IN ?", result.objectIdField), ids).Error
+				if errFindByIds != nil {
+					eId := uuid.NewString()
+
+					log.Printf("db err : %s: %s", eId, findErr.Error())
+
+					ctx.AbortWithStatusJSON(404, gin.H{
+						"msg": "db err",
+						"id":  eId,
 					})
 				} else {
-					ctx.JSON(200, gin.H{
-						"items":       dtos,
-						"pages":       pagesCount,
-						"total_items": totalItems,
-					})
+
+					dtos := []any{}
+					// convert to dto objects
+
+					for _, it := range items {
+
+						// check if item has dto converter
+						// todo pass permission value
+						_dtoResult := ToDto(it, appctx, userAuthData)
+						if _dtoResult.IsOk() {
+							unwrapped := _dtoResult.Unwrap()
+							dtos = append(dtos, unwrapped)
+						} else {
+							log.Printf("unable to convert object(%#+v) to api dto : %s", it, _dtoResult.UnwrapError().Error())
+						}
+					}
+
+					if userAuthData.Debug {
+						ctx.JSON(200, gin.H{
+							"items":       dtos,
+							"pages":       pagesCount,
+							"total_items": totalItems,
+							"logs":        userAuthData.getDebugLogs(),
+						})
+					} else {
+						ctx.JSON(200, gin.H{
+							"items":       dtos,
+							"pages":       pagesCount,
+							"total_items": totalItems,
+						})
+					}
 				}
 
 				return
@@ -935,8 +967,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	})
 
 	existingItems.GET("", func(ctx *gin.Context) {
-
-		
 
 		reqData := result.RequestData(ctx)
 
