@@ -88,7 +88,7 @@ type HasManyConfig[T any] struct {
 
 type DataTransformer[T any] func(ctx *AppContext[T], input any) (output any)
 
-func (it *CrudConfig[T, CtxType]) HasManyThrough(relTable string, dest_field, cur_field, filter_name string, inputTransformer DataTransformer[CtxType]) *CrudConfig[T, CtxType] {
+func (it *CrudConfig[T, CtxType]) FieldFilter(filter_name string, relTable string, dest_field, cur_field string, inputTransformer DataTransformer[CtxType]) *CrudConfig[T, CtxType] {
 
 	curConf := HasManyConfig[CtxType]{
 		FilterName:       filter_name,
@@ -588,8 +588,11 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				qB = qB.Order(sortQValue)
 			}
 
-			itemIds := map[string]any{}
-			findErr := qB.Table(result.tableName).Distinct(idField).Find(&itemIds).Error
+			itemIds := []map[string]any{}
+
+			respObject := qB.Table(result.tableName).Distinct(idField).Find(&itemIds)
+
+			findErr := respObject.Error
 
 			if findErr != nil {
 
@@ -604,13 +607,11 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				return
 			} else {
 
-				log.Printf("got item ids : %v", itemIds)
-
 				var items []T
 
 				ids := []any{}
-				for _, v := range itemIds {
-					ids = append(ids, v)
+				for _, rowItem := range itemIds {
+					ids = append(ids, rowItem[result.objectIdField])
 				}
 
 				errFindByIds := appctx.Db.Raw().Find(&items, fmt.Sprintf("%s IN ?", result.objectIdField), ids).Error
