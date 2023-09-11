@@ -143,9 +143,6 @@ func prepareFilterData[T any, CtxType any](
 
 			userAuthData.log_format(" softremoved `%s` set to `%v`", modelDataStruct.SoftDeleteField.FillName, filtersMap[modelDataStruct.SoftDeleteField.FillName])
 		}
-	} else {
-		log.Printf("HAS NOT softdeleted field")
-
 	}
 
 	// override user related fields to current auth user if its not an admin
