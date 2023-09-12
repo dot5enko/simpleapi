@@ -609,22 +609,26 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 				var items []T
 
-				ids := []any{}
+				// ids := []any{}
+
+				idQueryFormat := fmt.Sprintf("%s = ?", result.objectIdField)
+
 				for _, rowItem := range itemIds {
-					ids = append(ids, rowItem[result.objectIdField])
+
+					idValue := rowItem[result.objectIdField]
+
+					// ids = append(ids,)
+					var item T
+
+					errFindById := appctx.Db.Raw().First(&item, idQueryFormat, idValue).Error
+					if errFindById != nil {
+						userAuthData.log_format("unable to find item by id: %v %s", idValue, findErr.Error())
+					} else {
+						items = append(items, item)
+					}
 				}
 
-				errFindByIds := appctx.Db.Raw().Find(&items, fmt.Sprintf("%s IN ?", result.objectIdField), ids).Error
-				if errFindByIds != nil {
-					eId := uuid.NewString()
-
-					log.Printf("db err : %s: %s", eId, findErr.Error())
-
-					ctx.AbortWithStatusJSON(404, gin.H{
-						"msg": "db err",
-						"id":  eId,
-					})
-				} else {
+				{
 
 					dtos := []any{}
 					// convert to dto objects
