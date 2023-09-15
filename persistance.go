@@ -9,11 +9,11 @@ import (
 )
 
 type BeforeCreateCbAware[CtxType any] interface {
-	BeforeCreate(ctx *AppContext[CtxType]) error
+	BeforeEntityCreate(ctx *AppContext[CtxType]) error
 }
 
 type AfterCreateCbAware[CtxType any] interface {
-	AfterCreate(ctx *AppContext[CtxType]) error
+	AfterEntityCreate(ctx *AppContext[CtxType]) error
 }
 
 type OnAfterUpdateCbAware[CtxType any] interface {
@@ -81,7 +81,7 @@ func _isolatedCreate[CtxType any](obj any, ctx AppContext[CtxType]) (err error) 
 	// check after event
 	_obj, ok := obj.(AfterCreateCbAware[CtxType])
 	if ok {
-		return _obj.AfterCreate(&ctx)
+		return _obj.AfterEntityCreate(&ctx)
 	}
 
 	return nil
@@ -99,7 +99,61 @@ func _isolatedSave[CtxType any](obj any, ctx AppContext[CtxType]) (err error) {
 		}
 	}
 
+	// isCreate := false
+
+	// {
+	// 	// detect save or update
+
+	// 	tx := _db
+	// 	tx.Statement.Dest = obj
+
+	// 	reflectValue := reflect.Indirect(reflect.ValueOf(obj))
+	// 	for reflectValue.Kind() == reflect.Ptr || reflectValue.Kind() == reflect.Interface {
+	// 		reflectValue = reflect.Indirect(reflectValue)
+	// 	}
+
+	// 	switch reflectValue.Kind() {
+	// 	case reflect.Struct:
+	// 		if err := _db.Statement.Parse(obj); err == nil && _db.Statement.Schema != nil {
+	// 			for _, pf := range _db.Statement.Schema.PrimaryFields {
+	// 				if _, isZero := pf.ValueOf(_db.Statement.Context, reflectValue); isZero {
+	// 					isCreate = true
+	// 				}
+	// 			}
+	// 		}
+	// 	}
+	// }
+
+	// if isCreate {
+
+	// 	{
+	// 		__obj, ok := obj.(BeforeCreateCbAware[CtxType])
+	// 		if ok {
+	// 			cb := __obj.BeforeEntityCreate(&ctx)
+	// 			if cb != nil {
+	// 				return cb
+	// 			}
+	// 		}
+	// 	}
+
+	// 	err = _db.Create(obj).Error
+	// 	if err != nil {
+	// 		return err
+	// 	}
+
+	// 	{
+	// 		__obj, ok := obj.(AfterCreateCbAware[CtxType])
+	// 		if ok {
+	// 			cb := __obj.AfterEntityCreate(&ctx)
+	// 			if cb != nil {
+	// 				return cb
+	// 			}
+	// 		}
+	// 	}
+
+	// } else {
 	err = _db.Save(obj).Error
+	// }
 
 	if err != nil {
 		return err
