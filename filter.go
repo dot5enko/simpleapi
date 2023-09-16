@@ -132,8 +132,8 @@ func prepareFilterData[T any, CtxType any](
 	// filter soft deleted item
 	if modelDataStruct.SoftDeleteField.Has {
 		if !userAuthData.IsAdmin { // always hide softly removed items from userland, no exceptions
-			filtersMap[modelDataStruct.SoftDeleteField.FillName] = false
 			softdeleteField = modelDataStruct.SoftDeleteField.FillName
+			filtersMap[softdeleteField] = false
 			keepSoftDeleted = true
 		} else {
 			// if admin request forcely wants to query `removed` data - no problem
@@ -151,22 +151,35 @@ func prepareFilterData[T any, CtxType any](
 	// override user related fields to current auth user if its not an admin
 	// todo make it type safe through generics
 	// each table/entity should have it own type for id ?
-	if modelDataStruct.UserReferenceField.Has && !userAuthData.IsAdmin {
-		authId := userAuthData.AuthorizedUserId
+	if modelDataStruct.UserReferenceField.Has {
 
-		idValStr := fmt.Sprintf("%v", authId)
+		userBoundField = modelDataStruct.UserReferenceField.FillName
 
-		if authId == nil || idValStr == "" {
-			return typed.ResultFailed[filterData[CtxType]](ErrNoAccess)
-		} else {
-			// now its working cause db_name == fill_name
-			// todo fix to use fll name
-			keepUserBound = true
-			userBoundField = modelDataStruct.UserReferenceField.FillName
-			filtersMap[modelDataStruct.UserReferenceField.FillName] = userAuthData.AuthorizedUserId
+		skipUserField := false
+
+		if userAuthData.IsAdmin && filtersMap[userBoundField] != nil {
+			// allow for admin to view data of other users
+			userAuthData.log_format(" allow admin to view data of other user: %v", filtersMap[userBoundField])
+			skipUserField = true
 		}
 
-		userAuthData.log_format(" user reference field `%s` set to `%v`", modelDataStruct.UserReferenceField.FillName, filtersMap[modelDataStruct.UserReferenceField.FillName])
+		if !skipUserField {
+			authId := userAuthData.AuthorizedUserId
+
+			idValStr := fmt.Sprintf("%v", authId)
+
+			if authId == nil || idValStr == "" {
+				return typed.ResultFailed[filterData[CtxType]](ErrNoAccess)
+			} else {
+				// now its working cause db_name == fill_name
+				// todo fix to use fll name
+				keepUserBound = true
+
+				filtersMap[userBoundField] = userAuthData.AuthorizedUserId
+			}
+
+			userAuthData.log_format(" user reference field `%s` set to `%v`", modelDataStruct.UserReferenceField.FillName, filtersMap[modelDataStruct.UserReferenceField.FillName])
+		}
 	}
 
 	for filterFieldName, filterValue := range filtersMap {
