@@ -161,6 +161,12 @@ func prepareFilterData[T any, CtxType any](
 			// allow for admin to view data of other users
 			userAuthData.log_format(" allow admin to view data of other user: %v", filtersMap[userBoundField])
 			skipUserField = true
+
+			// if admin provided empty userid field remove the filter
+			if filtersMap[userBoundField] == "*" {
+				delete(filtersMap, userBoundField)
+			}
+
 		}
 
 		if !skipUserField {
