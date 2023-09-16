@@ -126,6 +126,9 @@ func prepareFilterData[T any, CtxType any](
 	softdeleteField := ""
 	keepSoftDeleted := false
 
+	userBoundField := ""
+	keepUserBound := false
+
 	// filter soft deleted item
 	if modelDataStruct.SoftDeleteField.Has {
 		if !userAuthData.IsAdmin { // always hide softly removed items from userland, no exceptions
@@ -151,11 +154,15 @@ func prepareFilterData[T any, CtxType any](
 	if modelDataStruct.UserReferenceField.Has && !userAuthData.IsAdmin {
 		authId := userAuthData.AuthorizedUserId
 
-		if authId == nil {
+		idValStr := fmt.Sprintf("%v", authId)
+
+		if authId == nil || idValStr == "" {
 			return typed.ResultFailed[filterData[CtxType]](ErrNoAccess)
 		} else {
 			// now its working cause db_name == fill_name
 			// todo fix to use fll name
+			keepUserBound = true
+			userBoundField = modelDataStruct.UserReferenceField.FillName
 			filtersMap[modelDataStruct.UserReferenceField.FillName] = userAuthData.AuthorizedUserId
 		}
 
@@ -198,7 +205,12 @@ func prepareFilterData[T any, CtxType any](
 				if keepSoftDeleted {
 					cont = true
 				}
+			}
 
+			if userBoundField == filterFieldName {
+				if keepUserBound {
+					cont = true
+				}
 			}
 
 			if !cont {
