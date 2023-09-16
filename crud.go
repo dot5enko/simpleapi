@@ -677,19 +677,26 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			}
 		}
 
+		// userFilterForced := false
+		// userFilterKey := ""
+
 		// todo move to compile time
 		// eg generate Use(...) without ifs
 		if modelInfo.UserReferenceField.Has && !reqData.IsAdmin {
 
 			userId := reqData.AuthorizedUserId
 
-			if userId == nil {
+			idResult := fmt.Sprintf("%v", userId)
+
+			if userId == nil || idResult == "" {
 				ctx.AbortWithStatusJSON(404, gin.H{
 					"msg": "item not f0und",
 				})
 				return
 			} else {
 
+				// userFilterForced = true
+				// userFilterKey = modelInfo.UserReferenceField.TableColumnName
 				// put user reference into filter
 				filter[modelInfo.UserReferenceField.TableColumnName] = userId
 			}
