@@ -133,14 +133,14 @@ func prepareFilterData[T any, CtxType any](
 	if modelDataStruct.SoftDeleteField.Has {
 		if !userAuthData.IsAdmin { // always hide softly removed items from userland, no exceptions
 			softdeleteField = modelDataStruct.SoftDeleteField.FillName
-			filtersMap[softdeleteField] = false
+			filtersMap[softdeleteField] = 0
 			keepSoftDeleted = true
 		} else {
 			// if admin request forcely wants to query `removed` data - no problem
 			_, removeFilterExists := filtersMap[modelDataStruct.SoftDeleteField.FillName]
 			if !removeFilterExists {
 				// hide removed elements by default
-				filtersMap[modelDataStruct.SoftDeleteField.FillName] = false
+				filtersMap[modelDataStruct.SoftDeleteField.FillName] = 0
 				keepSoftDeleted = true
 			}
 

@@ -662,7 +662,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		if modelInfo.SoftDeleteField.Has {
 			// do not display removed items for non admins
 			if !reqData.IsAdmin {
-				filter[modelInfo.SoftDeleteField.TableColumnName] = false
+				filter[modelInfo.SoftDeleteField.TableColumnName] = 0
 			} else {
 				filtersMap := map[string]any{}
 				_filterValue := ctx.Query("filter")
@@ -672,7 +672,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				_, removeFilterExists := filtersMap[modelInfo.SoftDeleteField.FillName]
 				if !removeFilterExists {
 					// hide removed elements by default
-					filtersMap[modelInfo.SoftDeleteField.FillName] = false
+					filtersMap[modelInfo.SoftDeleteField.FillName] = 0
 				}
 			}
 		}
