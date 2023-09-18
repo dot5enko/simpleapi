@@ -895,7 +895,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 				// todo make it somewhat clear what is going on here
 				fname := result.TypeDataModel.SoftDeleteField.FillName
-				dto := gjson.Parse(fmt.Sprintf(`{"%s":true}`, fname))
+				dto := gjson.Parse(fmt.Sprintf(`{"%s":0}`, fname))
 
 				reqData.log(func(logger *log.Logger) {
 					logger.Printf("filling soft removed field : %s", fname)
