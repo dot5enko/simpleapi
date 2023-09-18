@@ -572,7 +572,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 				itemIds := []map[string]any{}
 
-				finalQuery := qB.Debug().Table(result.tableName)
+				finalQuery := qB.Table(result.tableName)
 
 				if sortFieldName != "" {
 					finalQuery = finalQuery.Select(fmt.Sprintf("DISTINCT(%s)", idField), sortFieldName)
@@ -907,7 +907,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 				// todo make it somewhat clear what is going on here
 				fname := result.TypeDataModel.SoftDeleteField.FillName
-				dto := gjson.Parse(fmt.Sprintf(`{"%s":0}`, fname))
+				dto := gjson.Parse(fmt.Sprintf(`{"%s":1}`, fname))
 
 				reqData.log(func(logger *log.Logger) {
 					logger.Printf("filling soft removed field : %s", fname)
