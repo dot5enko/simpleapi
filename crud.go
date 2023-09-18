@@ -561,14 +561,26 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 					qB = qB.Offset(filterData.Offset)
 				}
 
+				var sortFieldName string
+
 				if listQueryParams.SortField != "" {
-					sortQValue := fmt.Sprintf("%s.%s %s", result.tableName, listQueryParams.SortField, sortOrder)
-					qB = qB.Order(sortQValue)
+					sortFieldName = fmt.Sprintf("%s.%s", result.tableName, listQueryParams.SortField)
+
+					sortOrderClause := fmt.Sprintf("%s %s", sortFieldName, sortOrder)
+					qB = qB.Order(sortOrderClause)
 				}
 
 				itemIds := []map[string]any{}
 
-				respObject := qB.Table(result.tableName).Distinct(idField).Find(&itemIds)
+				finalQuery := qB.Debug().Table(result.tableName)
+
+				if sortFieldName != "" {
+					finalQuery = finalQuery.Select(fmt.Sprintf("DISTINCT(%s)", idField), sortFieldName)
+				} else {
+					finalQuery = finalQuery.Distinct(idField)
+				}
+
+				respObject := finalQuery.Find(&itemIds)
 
 				findErr := respObject.Error
 
