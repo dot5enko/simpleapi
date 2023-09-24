@@ -279,6 +279,9 @@ var supportedFilters = map[string]FilterOperationHandler{
 	"in": func(fname string, decl map[string]any) (string, any) {
 		return fmt.Sprintf("%s IN ?", fname), decl["v"]
 	},
+	"lookup": func(fname string, decl map[string]any) (string, any) {
+		return fmt.Sprintf("%s LIKE ?", fname), fmt.Sprintf("%%%s%%", decl["v"])
+	},
 }
 
 func SetListFilterHandler(fname string, h FilterOperationHandler) {
