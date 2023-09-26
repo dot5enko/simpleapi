@@ -276,6 +276,9 @@ var supportedFilters = map[string]FilterOperationHandler{
 	"lte": func(fname string, decl map[string]any) (string, any) {
 		return fmt.Sprintf("%s <= ?", fname), decl["v"]
 	},
+	"ne": func(fname string, decl map[string]any) (string, any) {
+		return fmt.Sprintf("%s != ?", fname), decl["v"]
+	},
 	"in": func(fname string, decl map[string]any) (string, any) {
 		return fmt.Sprintf("%s IN ?", fname), decl["v"]
 	},
