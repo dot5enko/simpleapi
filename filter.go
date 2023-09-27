@@ -40,10 +40,12 @@ type filterData[CtxType any] struct {
 var ErrNoAccess = fmt.Errorf("user doesn't have access")
 
 type ListQueryParams struct {
-	SortField string `form:"sort_field"`
-	SortOrder int    `form:"order"`
-	Page      int    `form:"page"`
-	PerPage   int64  `form:"per_page"`
+	SortField           string `form:"sort_field"`
+	SortOrder           int    `form:"order"`
+	Page                int    `form:"page"`
+	PerPage             int64  `form:"per_page"`
+	PredefinedQuery     string `form:"q"`
+	PredefinedQueryArgs string `form:"args"`
 }
 
 func processFilterValueToSqlCond(tableName string, filterValue any, userAuthData RequestData, filterFieldName string, fieldInfo ApiTags) (fQueryCond string, argProcessed any, err error) {
@@ -107,7 +109,7 @@ func processFilterValueToSqlCond(tableName string, filterValue any, userAuthData
 }
 
 func prepareFilterData[T any, CtxType any](
-	filtersMap map[string]any,
+	filtersMap HM,
 	crudConfig *CrudConfig[T, CtxType],
 	modelDataStruct FieldsMapping,
 	userAuthData RequestData,

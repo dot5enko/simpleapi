@@ -34,6 +34,28 @@ type ModelIdFetcher[T any] func(obj *T) uint64
 type RelatedObjectIdGetter[T any] func(obj *T) any
 type RelatedItemsFetcher[OfType any, RelatedType any] func(ctx *gin.Context)
 
+type HM = map[string]any
+type pQueryArgProcessor func(args gjson.Result, filters HM) (HM, error)
+
+type predefinedQuery struct {
+	name          string
+	filters       HM
+	requiredArgs  []string
+	argsProcessor pQueryArgProcessor
+}
+
+func newPredefinedQuery(name string, filters HM, argsProcessor pQueryArgProcessor, requiredArgs []string) predefinedQuery {
+
+	result := predefinedQuery{
+		name:          name,
+		filters:       filters,
+		argsProcessor: argsProcessor,
+	}
+
+	return result
+
+}
+
 type CrudConfig[T any, CtxType any] struct {
 	ParentGroup *gin.RouterGroup
 	Model       T
@@ -69,6 +91,8 @@ type CrudConfig[T any, CtxType any] struct {
 	objectIdField string
 
 	paging PagingConfig
+
+	predefinedQueries map[string]predefinedQuery
 }
 
 type PagingConfig struct {
@@ -85,6 +109,124 @@ type HasManyConfig[T any] struct {
 }
 
 type DataTransformer[T any] func(ctx *AppContext[T], input any) (output any)
+
+func (it *CrudConfig[T, CtxType]) AddPredefinedQuery(name string, filters HM, argsH pQueryArgProcessor, requiredArgs ...string) *CrudConfig[T, CtxType] {
+
+	it.predefinedQueries[name] = newPredefinedQuery(name, filters, argsH, requiredArgs)
+	return it
+}
+
+type RespErr struct {
+	Data     HM
+	Httpcode int
+}
+
+func (r RespErr) Error() string {
+	return fmt.Sprintf("RespErr : %d", r.Httpcode)
+}
+
+func NewRespErr(code int, d HM) *RespErr {
+	return &RespErr{
+		Data:     d,
+		Httpcode: code,
+	}
+}
+
+func (c *CrudConfig[T, CtxType]) ParsePredefinedQuery(qparams ListQueryParams) (filter HM, err *RespErr) {
+	if qparams.PredefinedQuery != "" {
+
+		// check if there any predefined queries
+		if len(c.predefinedQueries) > 0 {
+
+			pq, ok := c.predefinedQueries[qparams.PredefinedQuery]
+
+			if !ok {
+
+				err = NewRespErr(400, gin.H{
+					"msg":  "q not found",
+					"q":    qparams.PredefinedQuery,
+					"code": "PQ1",
+				})
+				return
+			}
+
+			qArgs := qparams.PredefinedQueryArgs
+			var qArgsParsed gjson.Result
+			if qArgs != "" {
+				qArgsParsed = gjson.Parse(qArgs)
+				if !qArgsParsed.Exists() {
+
+					// userAuthData.log_format("unable to parse predefined q args json `%s`", qArgs)
+
+					err = NewRespErr(400, gin.H{
+						"msg":  "malformed args",
+						"code": "PQ2",
+					})
+					return
+				}
+			}
+
+			if len(pq.requiredArgs) > 0 {
+				// validate required args
+
+				for _, requiredArg := range pq.requiredArgs {
+					argVal := qArgsParsed.Get(requiredArg)
+					if !argVal.Exists() {
+						err = NewRespErr(400, gin.H{
+							"msg":  "required q arg not provided",
+							"code": "PQ3",
+							"arg":  requiredArg,
+						})
+						return
+					}
+				}
+			}
+
+			if pq.argsProcessor != nil {
+
+				func() {
+					defer func() {
+						rec := recover()
+						if rec != nil {
+
+							// log to debug logger
+
+							err = NewRespErr(500, gin.H{
+								"msg": "err processing predefined q",
+							})
+						}
+					}()
+
+					var _err error
+					filter, _err = pq.argsProcessor(qArgsParsed, pq.filters)
+
+					if _err != nil {
+						err = NewRespErr(500, HM{
+							"msg": "error processing predefined q args",
+						})
+					}
+				}()
+			} else {
+				filter = pq.filters
+			}
+		} else {
+			// userAuthData.log_format("request has query args, but no predefined queries configured for crud group")
+
+			err = NewRespErr(400, gin.H{
+				"msg":  "wrong q",
+				"code": "PQ3",
+			})
+			return
+		}
+	}
+
+	err = NewRespErr(500, gin.H{
+		"msg":  "unexpected predefined q",
+		"code": "PQ4",
+	})
+
+	return
+}
 
 func (it *CrudConfig[T, CtxType]) FieldFilter(filter_name string, relTable string, dest_field, cur_field string, inputTransformer DataTransformer[CtxType]) *CrudConfig[T, CtxType] {
 
@@ -251,6 +393,8 @@ func New[T any, CtxType any](crudGroup *CrudGroup[CtxType], group *gin.RouterGro
 		},
 
 		TypeDataModel: modelData,
+
+		predefinedQueries: map[string]predefinedQuery{},
 	}
 
 	// todo check rights in all methods
@@ -436,18 +580,28 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	if !result.disableEndpoints.List {
 		group.GET("", func(ctx *gin.Context) {
 
+			userAuthData := result.RequestData(ctx)
+
 			listQueryParams := ListQueryParams{}
 			ctx.BindQuery(&listQueryParams)
 
 			// TODO put into crud group state, no need to get it each time manually
 			modelDataStruct := result.TypeDataModel
-			userAuthData := result.RequestData(ctx)
 
 			// filters
 			// decode userdata from query
-			filtersMap := map[string]any{}
-			_filterValue := ctx.Query("filter")
-			json.Unmarshal([]byte(_filterValue), &filtersMap)
+			filtersMap := HM{}
+
+			if listQueryParams.PredefinedQuery != "" {
+				var predefinedQErr *RespErr
+				filtersMap, predefinedQErr = result.ParsePredefinedQuery(listQueryParams)
+				if predefinedQErr != nil {
+					ctx.JSON(predefinedQErr.Httpcode, predefinedQErr.Data)
+				}
+			} else {
+				_filterValue := ctx.Query("filter")
+				json.Unmarshal([]byte(_filterValue), &filtersMap)
+			}
 
 			filterCompiled := prepareFilterData[T, CtxType](filtersMap, result, modelDataStruct, userAuthData, listQueryParams)
 
