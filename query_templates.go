@@ -4,7 +4,7 @@ import (
 	"github.com/tidwall/gjson"
 )
 
-type pQueryArgProcessor func(args gjson.Result, filters HM) (HM, error)
+type PQueryArgProcessor func(args gjson.Result, filters HM) (HM, error)
 
 type QueryTemplate struct {
 }
@@ -13,11 +13,11 @@ type predefinedQuery struct {
 	name          string
 	filters       HM
 	requiredArgs  []string
-	argsProcessor pQueryArgProcessor
+	argsProcessor PQueryArgProcessor
 	override      ListQueryParams
 }
 
-func newPredefinedQuery(name string, filters HM, argsProcessor pQueryArgProcessor, requiredArgs []string, o ListQueryParams) predefinedQuery {
+func newPredefinedQuery(name string, filters HM, argsProcessor PQueryArgProcessor, requiredArgs []string, o ListQueryParams) predefinedQuery {
 
 	result := predefinedQuery{
 		name:          name,
@@ -30,7 +30,7 @@ func newPredefinedQuery(name string, filters HM, argsProcessor pQueryArgProcesso
 
 }
 
-func (it *CrudConfig[T, CtxType]) AddQueryTemplate(name string, qparams ListQueryParams, filters HM, argsH pQueryArgProcessor, requiredArgs ...string) *CrudConfig[T, CtxType] {
+func (it *CrudConfig[T, CtxType]) AddQueryTemplate(name string, qparams ListQueryParams, filters HM, argsH PQueryArgProcessor, requiredArgs ...string) *CrudConfig[T, CtxType] {
 
 	it.predefinedQueries[name] = newPredefinedQuery(name, filters, argsH, requiredArgs, qparams)
 	return it
