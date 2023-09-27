@@ -46,6 +46,7 @@ type ListQueryParams struct {
 	PerPage             int64  `form:"per_page"`
 	PredefinedQuery     string `form:"q"`
 	PredefinedQueryArgs string `form:"args"`
+	Filter              string `form:"filter"`
 }
 
 func processFilterValueToSqlCond(tableName string, filterValue any, userAuthData RequestData, filterFieldName string, fieldInfo ApiTags) (fQueryCond string, argProcessed any, err error) {

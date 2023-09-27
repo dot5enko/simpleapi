@@ -35,26 +35,6 @@ type RelatedObjectIdGetter[T any] func(obj *T) any
 type RelatedItemsFetcher[OfType any, RelatedType any] func(ctx *gin.Context)
 
 type HM = map[string]any
-type pQueryArgProcessor func(args gjson.Result, filters HM) (HM, error)
-
-type predefinedQuery struct {
-	name          string
-	filters       HM
-	requiredArgs  []string
-	argsProcessor pQueryArgProcessor
-}
-
-func newPredefinedQuery(name string, filters HM, argsProcessor pQueryArgProcessor, requiredArgs []string) predefinedQuery {
-
-	result := predefinedQuery{
-		name:          name,
-		filters:       filters,
-		argsProcessor: argsProcessor,
-	}
-
-	return result
-
-}
 
 type CrudConfig[T any, CtxType any] struct {
 	ParentGroup *gin.RouterGroup
@@ -109,124 +89,6 @@ type HasManyConfig[T any] struct {
 }
 
 type DataTransformer[T any] func(ctx *AppContext[T], input any) (output any)
-
-func (it *CrudConfig[T, CtxType]) AddPredefinedQuery(name string, filters HM, argsH pQueryArgProcessor, requiredArgs ...string) *CrudConfig[T, CtxType] {
-
-	it.predefinedQueries[name] = newPredefinedQuery(name, filters, argsH, requiredArgs)
-	return it
-}
-
-type RespErr struct {
-	Data     HM
-	Httpcode int
-}
-
-func (r RespErr) Error() string {
-	return fmt.Sprintf("RespErr : %d", r.Httpcode)
-}
-
-func NewRespErr(code int, d HM) *RespErr {
-	return &RespErr{
-		Data:     d,
-		Httpcode: code,
-	}
-}
-
-func (c *CrudConfig[T, CtxType]) ParsePredefinedQuery(qparams ListQueryParams) (filter HM, err *RespErr) {
-	if qparams.PredefinedQuery != "" {
-
-		// check if there any predefined queries
-		if len(c.predefinedQueries) > 0 {
-
-			pq, ok := c.predefinedQueries[qparams.PredefinedQuery]
-
-			if !ok {
-
-				err = NewRespErr(400, gin.H{
-					"msg":  "q not found",
-					"q":    qparams.PredefinedQuery,
-					"code": "PQ1",
-				})
-				return
-			}
-
-			qArgs := qparams.PredefinedQueryArgs
-			var qArgsParsed gjson.Result
-			if qArgs != "" {
-				qArgsParsed = gjson.Parse(qArgs)
-				if !qArgsParsed.Exists() {
-
-					// userAuthData.log_format("unable to parse predefined q args json `%s`", qArgs)
-
-					err = NewRespErr(400, gin.H{
-						"msg":  "malformed args",
-						"code": "PQ2",
-					})
-					return
-				}
-			}
-
-			if len(pq.requiredArgs) > 0 {
-				// validate required args
-
-				for _, requiredArg := range pq.requiredArgs {
-					argVal := qArgsParsed.Get(requiredArg)
-					if !argVal.Exists() {
-						err = NewRespErr(400, gin.H{
-							"msg":  "required q arg not provided",
-							"code": "PQ3",
-							"arg":  requiredArg,
-						})
-						return
-					}
-				}
-			}
-
-			if pq.argsProcessor != nil {
-
-				func() {
-					defer func() {
-						rec := recover()
-						if rec != nil {
-
-							// log to debug logger
-
-							err = NewRespErr(500, gin.H{
-								"msg": "err processing predefined q",
-							})
-						}
-					}()
-
-					var _err error
-					filter, _err = pq.argsProcessor(qArgsParsed, pq.filters)
-
-					if _err != nil {
-						err = NewRespErr(500, HM{
-							"msg": "error processing predefined q args",
-						})
-					}
-				}()
-			} else {
-				filter = pq.filters
-			}
-		} else {
-			// userAuthData.log_format("request has query args, but no predefined queries configured for crud group")
-
-			err = NewRespErr(400, gin.H{
-				"msg":  "wrong q",
-				"code": "PQ3",
-			})
-			return
-		}
-	}
-
-	err = NewRespErr(500, gin.H{
-		"msg":  "unexpected predefined q",
-		"code": "PQ4",
-	})
-
-	return
-}
 
 func (it *CrudConfig[T, CtxType]) FieldFilter(filter_name string, relTable string, dest_field, cur_field string, inputTransformer DataTransformer[CtxType]) *CrudConfig[T, CtxType] {
 
@@ -461,7 +323,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		if wp != nil {
 			hasPermission := (*wp)(ctx, appctx)
 			if !hasPermission {
-				ctx.AbortWithStatusJSON(403, gin.H{
+				ctx.AbortWithStatusJSON(403, HM{
 					"msg": "No write permission, code updated",
 				})
 				return
@@ -475,7 +337,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		group.Use(func(ctx *gin.Context) {
 			hasPermission := (*rp)(ctx, appctx)
 			if !hasPermission {
-				ctx.AbortWithStatusJSON(403, gin.H{
+				ctx.AbortWithStatusJSON(403, HM{
 					"msg": "No read permission",
 				})
 				return
@@ -496,7 +358,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			// create new object
 			data, err := ctx.GetRawData()
 			if err != nil {
-				ctx.JSON(500, gin.H{
+				ctx.JSON(500, HM{
 					"msg": "unable to get object data, when creating new one",
 					"err": err.Error(),
 				})
@@ -511,7 +373,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, parsedJson, nil, req)
 
 			if fillError != nil {
-				ctx.JSON(500, gin.H{
+				ctx.JSON(500, HM{
 					"msg": "can't fill object with provided data",
 					"err": fillError.Error(),
 				})
@@ -560,7 +422,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			})
 
 			if createdErr != nil {
-				ctx.JSON(500, gin.H{
+				ctx.JSON(500, HM{
 					"msg": "unable to create new object",
 					"err": createdErr.Error(),
 				})
@@ -569,7 +431,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 			reqData := result.RequestData(ctx)
 
-			ctx.JSON(200, gin.H{
+			ctx.JSON(200, HM{
 				"created": true,
 				"object":  ToDto(modelCopy, appctx, reqData).Unwrap(),
 			})
@@ -594,19 +456,27 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 			if listQueryParams.PredefinedQuery != "" {
 				var predefinedQErr *RespErr
-				filtersMap, predefinedQErr = result.ParsePredefinedQuery(listQueryParams)
+
+				oldPage := listQueryParams.Page
+
+				// overrides paging, sorting etc
+				filtersMap, listQueryParams, predefinedQErr = result.ParsePredefinedQuery(listQueryParams)
 				if predefinedQErr != nil {
 					ctx.JSON(predefinedQErr.Httpcode, predefinedQErr.Data)
+					return
 				}
+
+				listQueryParams.Page = oldPage
+
 			} else {
-				_filterValue := ctx.Query("filter")
+				_filterValue := listQueryParams.Filter
 				json.Unmarshal([]byte(_filterValue), &filtersMap)
 			}
 
 			filterCompiled := prepareFilterData[T, CtxType](filtersMap, result, modelDataStruct, userAuthData, listQueryParams)
 
 			if !filterCompiled.IsOk() {
-				ctx.JSON(200, gin.H{
+				ctx.JSON(200, HM{
 					"items":       []any{},
 					"pages":       0,
 					"total_items": 0,
@@ -750,7 +620,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 					log.Printf("db err : %s: %s", eId, findErr.Error())
 
-					ctx.AbortWithStatusJSON(404, gin.H{
+					ctx.AbortWithStatusJSON(404, HM{
 						"msg": "db err",
 						"id":  eId,
 					})
@@ -797,14 +667,14 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 						}
 
 						if userAuthData.Debug {
-							ctx.JSON(200, gin.H{
+							ctx.JSON(200, HM{
 								"items":       dtos,
 								"pages":       pagesCount,
 								"total_items": totalItems,
 								"logs":        userAuthData.getDebugLogs(),
 							})
 						} else {
-							ctx.JSON(200, gin.H{
+							ctx.JSON(200, HM{
 								"items":       dtos,
 								"pages":       pagesCount,
 								"total_items": totalItems,
@@ -861,7 +731,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			idResult := fmt.Sprintf("%v", userId)
 
 			if userId == nil || idResult == "" {
-				ctx.AbortWithStatusJSON(404, gin.H{
+				ctx.AbortWithStatusJSON(404, HM{
 					"msg": "item not f0und",
 				})
 				return
@@ -899,7 +769,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 			log.Printf("db err : %s: %s", eId, findErr.Error())
 
-			ctx.AbortWithStatusJSON(404, gin.H{
+			ctx.AbortWithStatusJSON(404, HM{
 				"msg": "object not found",
 				"id":  eId,
 			})
@@ -928,7 +798,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			data, err := ctx.GetRawData()
 
 			if err != nil {
-				ctx.JSON(500, gin.H{
+				ctx.JSON(500, HM{
 					"msg": "unable to get object data, when creating new one",
 					"err": err.Error(),
 				})
@@ -937,7 +807,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			parsed := gjson.ParseBytes(data)
 
 			if !parsed.Exists() {
-				ctx.JSON(500, gin.H{
+				ctx.JSON(500, HM{
 					"msg": "unable to decode object info",
 					"raw": string(data),
 				})
@@ -954,7 +824,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			fillError := appctx.FillEntityFromDto(result.TypeDataModel, ref, parsed, nil, req)
 
 			if fillError != nil {
-				ctx.JSON(500, gin.H{
+				ctx.JSON(500, HM{
 					"msg": "fill object fields erorr",
 					"err": fillError.Error(),
 				})
@@ -1007,7 +877,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 			if saveError != nil {
 
-				repsJson := gin.H{
+				repsJson := HM{
 					"msg": "unable to update object",
 				}
 
@@ -1026,7 +896,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 				resultItem := ToDto(anotherCopy, appctx, req).Unwrap()
 
-				_resultJson := gin.H{
+				_resultJson := HM{
 					"item": resultItem,
 				}
 
@@ -1152,7 +1022,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 			ctx.Writer.Header().Add("Server-Timing", fmt.Sprintf("miss, app;dur=%.2f", durFloat))
 
-			ctx.JSON(200, gin.H{
+			ctx.JSON(200, HM{
 				"item": ToDto(modelCopy, appctx, reqData).Unwrap(),
 			})
 		})
