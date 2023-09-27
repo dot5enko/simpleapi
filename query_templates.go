@@ -1,6 +1,8 @@
 package simpleapi
 
 import (
+	"log"
+
 	"github.com/tidwall/gjson"
 )
 
@@ -24,6 +26,7 @@ func newPredefinedQuery(name string, filters HM, argsProcessor PQueryArgProcesso
 		filters:       filters,
 		argsProcessor: argsProcessor,
 		override:      o,
+		requiredArgs:  requiredArgs,
 	}
 
 	return result
@@ -33,18 +36,25 @@ func newPredefinedQuery(name string, filters HM, argsProcessor PQueryArgProcesso
 func (it *CrudConfig[T, CtxType]) AddQueryTemplate(name string, qparams ListQueryParams, filters HM, argsH PQueryArgProcessor, requiredArgs ...string) *CrudConfig[T, CtxType] {
 
 	it.predefinedQueries[name] = newPredefinedQuery(name, filters, argsH, requiredArgs, qparams)
+
 	return it
 }
 
 func (c *CrudConfig[T, CtxType]) ParsePredefinedQuery(qparams ListQueryParams) (filter HM, override ListQueryParams, err *RespErr) {
 	if qparams.PredefinedQuery != "" {
 
+		// log.Printf("parsing a template query for %s ", qparams.PredefinedQuery)
+
 		// check if there any predefined queries
 		if len(c.predefinedQueries) > 0 {
+
+			// log.Printf("there's some predefined query : %d", len(c.predefinedQueries))
 
 			pq, ok := c.predefinedQueries[qparams.PredefinedQuery]
 
 			if !ok {
+
+				// log.Printf("not found")
 
 				err = NewRespErr(400, HM{
 					"msg":  "q not found",
@@ -76,6 +86,7 @@ func (c *CrudConfig[T, CtxType]) ParsePredefinedQuery(qparams ListQueryParams) (
 				for _, requiredArg := range pq.requiredArgs {
 					argVal := qArgsParsed.Get(requiredArg)
 					if !argVal.Exists() {
+
 						err = NewRespErr(400, HM{
 							"msg":  "required q arg not provided",
 							"code": "PQ3",
@@ -83,7 +94,12 @@ func (c *CrudConfig[T, CtxType]) ParsePredefinedQuery(qparams ListQueryParams) (
 						})
 						return
 					}
+
 				}
+
+				// log.Printf(" required args check passed ")
+			} else {
+				log.Printf("no required args was set ")
 			}
 
 			if pq.argsProcessor != nil {
@@ -112,9 +128,12 @@ func (c *CrudConfig[T, CtxType]) ParsePredefinedQuery(qparams ListQueryParams) (
 				}()
 			} else {
 				filter = pq.filters
-				override = pq.override
 
 			}
+
+			override = pq.override
+			return
+
 		} else {
 			// userAuthData.log_format("request has query args, but no predefined queries configured for crud group")
 
@@ -127,8 +146,9 @@ func (c *CrudConfig[T, CtxType]) ParsePredefinedQuery(qparams ListQueryParams) (
 	}
 
 	err = NewRespErr(500, HM{
-		"msg":  "unexpected predefined q",
-		"code": "PQ4",
+		"msg":    "unexpected predefined q",
+		"code":   "PQ4",
+		"params": qparams,
 	})
 
 	return
