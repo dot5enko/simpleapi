@@ -849,27 +849,18 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 					if fieldsData.UpdateExtraMethod {
 
-						req.log(func(logger *log.Logger) {
-							logger.Printf("processing extra update method for entity")
-						})
+						req.log_format("processing extra update method for entity")
 
 						objUpdater, _ := any(ref).(OnUpdateEventHandler[CtxType, T])
 						updateEventError := objUpdater.OnUpdate(&isolatedContext, modelCopy)
 						if updateEventError != nil {
 
-							req.log(func(logger *log.Logger) {
-								logger.Printf("rollback update due to OnUpdate: %s", updateEventError.Error())
-							})
-
+							req.log_format("rollback update due to OnUpdate: %s", updateEventError.Error())
 							return updateEventError
 						}
 					}
 				} else {
-
-					req.log(func(logger *log.Logger) {
-						logger.Printf("got an error while saving item")
-					})
-
+					req.log_format("got an error while saving item")
 				}
 
 				return saveErr

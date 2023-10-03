@@ -32,16 +32,23 @@ type DbWrapper[CtxType any] struct {
 	db    *gorm.DB
 	topDb *gorm.DB
 
-	app   *AppContext[CtxType]
-	debug bool
+	app         *AppContext[CtxType]
+	debug       bool
+	automigrate bool
+}
+
+func (d DbWrapper[CtxType]) Automigrate(v bool) DbWrapper[CtxType] {
+	d.automigrate = v
+	return d
 }
 
 func WrapGormDb[T any](d *gorm.DB, ctx *AppContext[T]) DbWrapper[T] {
 	return DbWrapper[T]{
-		db:    d,
-		topDb: d,
-		app:   ctx,
-		debug: false,
+		db:          d,
+		topDb:       d,
+		app:         ctx,
+		debug:       false,
+		automigrate: true,
 	}
 }
 

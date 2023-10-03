@@ -223,18 +223,19 @@ func (c DbWrapper[T]) MigrateWithOnUpdate(object any, initalizer MigrateInitiali
 
 func (c DbWrapper[T]) MigrateAll(objects ...any) {
 	for _, it := range objects {
-		c.Migrate(it)
+		Migrate(c, it)
 	}
 }
 
-func (c DbWrapper[T]) Migrate(object any) {
+func Migrate[T any, ObjectT any](c DbWrapper[T], object ObjectT) {
 
-	m := c.db.Migrator()
-
-	m.AutoMigrate(object)
+	if c.automigrate {
+		m := c.db.Migrator()
+		m.AutoMigrate(object)
+	}
 
 	objTypeName := GetObjectType(object)
-	el := GetFieldTags[T, any](object)
+	el := GetFieldTags[T](object)
 	el.TypeName = objTypeName
 	c.app.objects[objTypeName] = el
 }
