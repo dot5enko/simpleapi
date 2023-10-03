@@ -852,7 +852,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 						req.log_format("processing extra update method for entity")
 
 						objUpdater, _ := any(ref).(OnUpdateEventHandler[CtxType, T])
-						updateEventError := objUpdater.OnUpdate(&isolatedContext, modelCopy)
+						updateEventError := objUpdater.OnUpdate(&isolatedContext, modelCopy, req)
 						if updateEventError != nil {
 
 							req.log_format("rollback update due to OnUpdate: %s", updateEventError.Error())
