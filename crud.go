@@ -297,10 +297,93 @@ func SetListFilterHandler(fname string, h FilterOperationHandler) {
 	supportedFilters[fname] = h
 }
 
+func (result *CrudConfig[T, CtxType]) CreateEntity(ctx *gin.Context) *RespErr {
+	var modelCopy T
+
+	appctx := result.App
+
+	// create new object
+	data, err := ctx.GetRawData()
+	if err != nil {
+		return NewRespErr(500, HM{
+			"msg": "unable to get object data, when creating new one",
+			"err": err.Error(),
+		})
+	}
+
+	// default fill from model tags
+	parsedJson := gjson.ParseBytes(data)
+
+	// req := result.RequestData(ctx)
+	reqData := result.RequestData(ctx)
+
+	fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, parsedJson, nil, reqData)
+
+	if fillError != nil {
+		return NewRespErr(500, HM{
+			"msg": "can't fill object with provided data",
+			"err": fillError.Error(),
+		})
+	}
+
+	createdErr := appctx.Db.Raw().Transaction(func(tx *gorm.DB) error {
+
+		isolatedContext := appctx.isolateDatabase(tx)
+		isolatedContext.Request = ctx
+
+		if result.objectCreate != nil {
+
+			crudCtx := CrudContext[T, CtxType]{
+				App:  &isolatedContext,
+				Crud: result,
+			}
+
+			errCreate := result.objectCreate(crudCtx, &modelCopy)
+			if errCreate != nil {
+				return fmt.Errorf("unable to perform pre object create hook: %s", errCreate.Error())
+			}
+		}
+
+		createErr := tx.Model(&modelCopy).Create(&modelCopy).Error
+
+		if createErr != nil {
+			return fmt.Errorf("unable to create new object: %s", createErr.Error())
+		}
+
+		if result.relTypeTable != "" {
+			afterCreateErr := createRelAfterSave(&isolatedContext, &modelCopy, result.relTypeTable)
+			if afterCreateErr != nil {
+				return fmt.Errorf("unable to create related reference: %s", afterCreateErr.Error())
+			}
+		}
+
+		if result.afterCreate != nil {
+			afterCreateErr := result.afterCreate(&isolatedContext, &modelCopy)
+			if afterCreateErr != nil {
+				return fmt.Errorf("unable to perform pre object create hook: %s", afterCreateErr.Error())
+			}
+		}
+
+		return nil
+	})
+
+	if createdErr != nil {
+		return NewRespErr(500, HM{
+			"msg": "unable to create new object",
+			"err": createdErr.Error(),
+		})
+	}
+
+	return NewRespErr(200, HM{
+		"created": true,
+		"object":  ToDto(modelCopy, appctx, reqData).Unwrap(),
+	})
+}
+
 func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 	group := result.ParentGroup
-	model := result.Model
+	// model := result.Model
 	appctx := result.App
 
 	hasAdminOnlyFiedls := false
@@ -353,88 +436,15 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	if !result.disableEndpoints.Create {
 		group.POST("", writePermissionMiddleware, func(ctx *gin.Context) {
 
-			var modelCopy T
+			result := result.CreateEntity(ctx)
 
-			// create new object
-			data, err := ctx.GetRawData()
-			if err != nil {
-				ctx.JSON(500, HM{
-					"msg": "unable to get object data, when creating new one",
-					"err": err.Error(),
+			if result == nil {
+				ctx.JSON(500, gin.H{
+					"msg": "unexpected response",
 				})
-				return
+			} else {
+				ctx.JSON(result.Httpcode, result.Data)
 			}
-
-			// default fill from model tags
-			parsedJson := gjson.ParseBytes(data)
-
-			req := result.RequestData(ctx)
-
-			fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, parsedJson, nil, req)
-
-			if fillError != nil {
-				ctx.JSON(500, HM{
-					"msg": "can't fill object with provided data",
-					"err": fillError.Error(),
-				})
-				return
-			}
-
-			createdErr := appctx.Db.Raw().Transaction(func(tx *gorm.DB) error {
-
-				isolatedContext := appctx.isolateDatabase(tx)
-				isolatedContext.Request = ctx
-
-				if result.objectCreate != nil {
-
-					crudCtx := CrudContext[T, CtxType]{
-						App:  &isolatedContext,
-						Crud: result,
-					}
-
-					errCreate := result.objectCreate(crudCtx, &modelCopy)
-					if errCreate != nil {
-						return fmt.Errorf("unable to perform pre object create hook: %s", errCreate.Error())
-					}
-				}
-
-				createErr := tx.Model(&model).Create(&modelCopy).Error
-
-				if createErr != nil {
-					return fmt.Errorf("unable to create new object: %s", createErr.Error())
-				}
-
-				if result.relTypeTable != "" {
-					afterCreateErr := createRelAfterSave(&isolatedContext, &modelCopy, result.relTypeTable)
-					if afterCreateErr != nil {
-						return fmt.Errorf("unable to create related reference: %s", afterCreateErr.Error())
-					}
-				}
-
-				if result.afterCreate != nil {
-					afterCreateErr := result.afterCreate(&isolatedContext, &modelCopy)
-					if afterCreateErr != nil {
-						return fmt.Errorf("unable to perform pre object create hook: %s", afterCreateErr.Error())
-					}
-				}
-
-				return nil
-			})
-
-			if createdErr != nil {
-				ctx.JSON(500, HM{
-					"msg": "unable to create new object",
-					"err": createdErr.Error(),
-				})
-				return
-			}
-
-			reqData := result.RequestData(ctx)
-
-			ctx.JSON(200, HM{
-				"created": true,
-				"object":  ToDto(modelCopy, appctx, reqData).Unwrap(),
-			})
 		})
 	}
 
@@ -843,9 +853,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 					fieldsData := result.TypeDataModel
 
-					req.log(func(logger *log.Logger) {
-						logger.Printf("saved succesfully")
-					})
+					req.log_format("saved succesfully")
 
 					if fieldsData.UpdateExtraMethod {
 
