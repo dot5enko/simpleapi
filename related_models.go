@@ -3,7 +3,6 @@ package simpleapi
 import (
 	"fmt"
 	"log"
-	"reflect"
 	"runtime/debug"
 
 	"github.com/gin-gonic/gin"
@@ -127,18 +126,18 @@ func RelatedModels[Related any, CtxType any, OfType any](
 	}
 }
 
-func createRelAfterSave[T any, CtxType any](appctx *AppContext[CtxType], obj *T, relTable string) error {
+// func createRelAfterSave[T any, CtxType any](appctx *AppContext[CtxType], obj *T, relTable string) error {
 
-	var relation UserToObject
+// 	var relation UserToObject
 
-	// todo optimize
-	val := reflect.Indirect(reflect.ValueOf(obj))
+// 	// todo optimize
+// 	val := reflect.Indirect(reflect.ValueOf(obj))
 
-	relation.ObjectId = val.FieldByName("Id").Uint()
-	relation.UserId = GetUserId(appctx.Request)
+// 	relation.ObjectId = val.FieldByName("Id").Uint()
+// 	relation.UserId = GetUserId(appctx.Request)
 
-	return appctx.Db.Raw().Table(relTable).Create(&relation).Error
-}
+// 	return appctx.Db.Raw().Table(relTable).Create(&relation).Error
+// }
 
 // todo add role
 func GetUserRelatedObjects[T any](

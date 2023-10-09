@@ -11,9 +11,14 @@ func TestBeforeUpdateEvent(t *testing.T) {
 
 	anyEvent := any(event)
 
-	_, ok := anyEvent.(OnBeforeUpdateCbAware[MockAppContext])
+	cbAware_, ok := anyEvent.(OnBeforeUpdateCbAware[MockAppContext])
+
+	fakeContext := NewAppContext[MockAppContext](&MockAppContext{})
 
 	if !ok {
 		t.Log("type is not a beforeUpdate interface")
+	} else {
+		t.Log("invoking before update event")
+		cbAware_.BeforeUpdate(fakeContext)
 	}
 }

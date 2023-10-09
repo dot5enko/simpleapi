@@ -326,9 +326,8 @@ func (result *CrudConfig[T, CtxType]) CreateEntity(ctx *gin.Context) *RespErr {
 		})
 	}
 
-	createdErr := appctx.Db.Raw().Transaction(func(tx *gorm.DB) error {
+	createdErr := appctx.DbTransaction(func(isolatedContext AppContext[CtxType]) error {
 
-		isolatedContext := appctx.isolateDatabase(tx)
 		isolatedContext.Request = ctx
 
 		if result.objectCreate != nil {
@@ -344,18 +343,18 @@ func (result *CrudConfig[T, CtxType]) CreateEntity(ctx *gin.Context) *RespErr {
 			}
 		}
 
-		createErr := tx.Model(&modelCopy).Create(&modelCopy).Error
+		createErr := isolatedContext.Db.Create(&modelCopy)
 
 		if createErr != nil {
 			return fmt.Errorf("unable to create new object: %s", createErr.Error())
 		}
 
-		if result.relTypeTable != "" {
-			afterCreateErr := createRelAfterSave(&isolatedContext, &modelCopy, result.relTypeTable)
-			if afterCreateErr != nil {
-				return fmt.Errorf("unable to create related reference: %s", afterCreateErr.Error())
-			}
-		}
+		// if result.relTypeTable != "" {
+		// 	afterCreateErr := createRelAfterSave(&isolatedContext, &modelCopy, result.relTypeTable)
+		// 	if afterCreateErr != nil {
+		// 		return fmt.Errorf("unable to create related reference: %s", afterCreateErr.Error())
+		// 	}
+		// }
 
 		if result.afterCreate != nil {
 			afterCreateErr := result.afterCreate(&isolatedContext, &modelCopy)
