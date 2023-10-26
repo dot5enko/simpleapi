@@ -297,10 +297,8 @@ func SetListFilterHandler(fname string, h FilterOperationHandler) {
 	supportedFilters[fname] = h
 }
 
-func (result *CrudConfig[T, CtxType]) CreateEntity(ctx *gin.Context, parsedJson gjson.Result, reqData RequestData) (objectCreated T, respData *RespErr) {
+func (result *CrudConfig[T, CtxType]) CreateEntity(appctx *AppContext[CtxType], ctx *gin.Context, parsedJson gjson.Result, reqData RequestData) (objectCreated T, respData *RespErr) {
 	var modelCopy T
-
-	appctx := result.App
 
 	fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, parsedJson, nil, reqData)
 
@@ -439,7 +437,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			// req := result.RequestData(ctx)
 			reqData := result.RequestData(ctx)
 
-			_, result := result.CreateEntity(ctx, parsedJson, reqData)
+			_, result := result.CreateEntity(appctx, ctx, parsedJson, reqData)
 
 			if result == nil {
 				ctx.JSON(500, gin.H{
