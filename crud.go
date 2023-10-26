@@ -297,7 +297,7 @@ func SetListFilterHandler(fname string, h FilterOperationHandler) {
 	supportedFilters[fname] = h
 }
 
-func (result *CrudConfig[T, CtxType]) CreateEntity(ctx *gin.Context) *RespErr {
+func (result *CrudConfig[T, CtxType]) CreateEntity(ctx *gin.Context) (objectCreated T, respData *RespErr) {
 	var modelCopy T
 
 	appctx := result.App
@@ -305,10 +305,11 @@ func (result *CrudConfig[T, CtxType]) CreateEntity(ctx *gin.Context) *RespErr {
 	// create new object
 	data, err := ctx.GetRawData()
 	if err != nil {
-		return NewRespErr(500, HM{
+		respData = NewRespErr(500, HM{
 			"msg": "unable to get object data, when creating new one",
 			"err": err.Error(),
 		})
+		return
 	}
 
 	// default fill from model tags
@@ -320,10 +321,11 @@ func (result *CrudConfig[T, CtxType]) CreateEntity(ctx *gin.Context) *RespErr {
 	fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, parsedJson, nil, reqData)
 
 	if fillError != nil {
-		return NewRespErr(500, HM{
+		respData = NewRespErr(500, HM{
 			"msg": "can't fill object with provided data",
 			"err": fillError.Error(),
 		})
+		return
 	}
 
 	createdErr := appctx.DbTransaction(func(isolatedContext AppContext[CtxType]) error {
@@ -367,13 +369,14 @@ func (result *CrudConfig[T, CtxType]) CreateEntity(ctx *gin.Context) *RespErr {
 	})
 
 	if createdErr != nil {
-		return NewRespErr(500, HM{
+		respData = NewRespErr(500, HM{
 			"msg": "unable to create new object",
 			"err": createdErr.Error(),
 		})
+		return
 	}
 
-	return NewRespErr(200, HM{
+	return modelCopy, NewRespErr(200, HM{
 		"created": true,
 		"object":  ToDto(modelCopy, appctx, reqData).Unwrap(),
 	})
@@ -435,7 +438,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	if !result.disableEndpoints.Create {
 		group.POST("", writePermissionMiddleware, func(ctx *gin.Context) {
 
-			result := result.CreateEntity(ctx)
+			_, result := result.CreateEntity(ctx)
 
 			if result == nil {
 				ctx.JSON(500, gin.H{
