@@ -253,11 +253,15 @@ type TransactionProcessor[T any] func(c AppContext[T]) error
 
 func (c AppContext[T]) DbTransaction(processor TransactionProcessor[T]) error {
 
-	return c.Db.Raw().Transaction(func(tx *gorm.DB) error {
+	if c.isolated {
+		return processor(c)
+	} else {
+		return c.Db.Raw().Transaction(func(tx *gorm.DB) error {
 
-		isolatedCtx := c.isolateDatabase(tx)
-		isolatedCtx.isolated = true
+			isolatedCtx := c.isolateDatabase(tx)
+			isolatedCtx.isolated = true
 
-		return processor(isolatedCtx)
-	})
+			return processor(isolatedCtx)
+		})
+	}
 }
