@@ -297,26 +297,10 @@ func SetListFilterHandler(fname string, h FilterOperationHandler) {
 	supportedFilters[fname] = h
 }
 
-func (result *CrudConfig[T, CtxType]) CreateEntity(ctx *gin.Context) (objectCreated T, respData *RespErr) {
+func (result *CrudConfig[T, CtxType]) CreateEntity(ctx *gin.Context, parsedJson gjson.Result, reqData RequestData) (objectCreated T, respData *RespErr) {
 	var modelCopy T
 
 	appctx := result.App
-
-	// create new object
-	data, err := ctx.GetRawData()
-	if err != nil {
-		respData = NewRespErr(500, HM{
-			"msg": "unable to get object data, when creating new one",
-			"err": err.Error(),
-		})
-		return
-	}
-
-	// default fill from model tags
-	parsedJson := gjson.ParseBytes(data)
-
-	// req := result.RequestData(ctx)
-	reqData := result.RequestData(ctx)
 
 	fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, parsedJson, nil, reqData)
 
@@ -330,6 +314,7 @@ func (result *CrudConfig[T, CtxType]) CreateEntity(ctx *gin.Context) (objectCrea
 
 	createdErr := appctx.DbTransaction(func(isolatedContext AppContext[CtxType]) error {
 
+		// todo check if object is used somewhere
 		isolatedContext.Request = ctx
 
 		if result.objectCreate != nil {
@@ -438,7 +423,23 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	if !result.disableEndpoints.Create {
 		group.POST("", writePermissionMiddleware, func(ctx *gin.Context) {
 
-			_, result := result.CreateEntity(ctx)
+			// create new object
+			data, err := ctx.GetRawData()
+			if err != nil {
+				ctx.JSON(500, HM{
+					"msg": "unable to get object data, when creating new one",
+					"err": err.Error(),
+				})
+				return
+			}
+
+			// default fill from model tags
+			parsedJson := gjson.ParseBytes(data)
+
+			// req := result.RequestData(ctx)
+			reqData := result.RequestData(ctx)
+
+			_, result := result.CreateEntity(ctx, parsedJson, reqData)
 
 			if result == nil {
 				ctx.JSON(500, gin.H{
