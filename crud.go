@@ -297,6 +297,86 @@ func SetListFilterHandler(fname string, h FilterOperationHandler) {
 	supportedFilters[fname] = h
 }
 
+func (result *CrudConfig[T, CtxType]) DeleteEntity(appctx *AppContext[CtxType], ctx *gin.Context, reqData RequestData) (respData *RespErr) {
+
+	var modelCopy T
+
+	model, _ := ctx.Get("_eobj")
+	modelCopy = model.(T)
+
+	responseData := respData.Data
+
+	if result.TypeDataModel.SoftDeleteField.Has {
+		// soft removable items are not actually deleted
+
+		// todo make it somewhat clear what is going on here
+		fname := result.TypeDataModel.SoftDeleteField.FillName
+		dto := gjson.Parse(fmt.Sprintf(`{"%s":1}`, fname))
+
+		reqData.log(func(logger *log.Logger) {
+			logger.Printf("filling soft removed field : %s", fname)
+		})
+
+		fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, dto, nil, reqData)
+
+		if fillError != nil {
+
+			responseData["msg"] = "fill object fields error"
+
+			if reqData.IsAdmin {
+				responseData["err"] = fillError.Error()
+			}
+
+			respData.Httpcode = 500
+
+			return
+		}
+
+		updateErr := appctx.Db.Save(&modelCopy)
+		if updateErr != nil {
+
+			respData.Httpcode = 500
+
+			responseData["msg"] = "unable to soft remove"
+
+			if reqData.IsAdmin {
+				responseData["err"] = updateErr.Error()
+			}
+
+			return
+		} else {
+
+			respData.Httpcode = 200
+
+			responseData["ok"] = true
+			responseData["msg"] = "soft removed"
+
+			return
+		}
+
+	} else {
+
+		deleteError := appctx.Db.Delete(&modelCopy)
+		if deleteError != nil {
+
+			respData.Httpcode = 500
+
+			responseData["msg"] = "unable to soft remove"
+
+			if reqData.IsAdmin {
+				responseData["err"] = deleteError.Error()
+			}
+
+			return
+		} else {
+			respData.Httpcode = 200
+			responseData["ok"] = true
+		}
+	}
+
+	return
+}
+
 func (result *CrudConfig[T, CtxType]) CreateEntity(appctx *AppContext[CtxType], ctx *gin.Context, parsedJson gjson.Result, reqData RequestData) (objectCreated T, respData *RespErr) {
 	var modelCopy T
 
@@ -913,11 +993,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 	if !result.disableEndpoints.Delete {
 		existingItems.DELETE("", writePermissionMiddleware, func(ctx *gin.Context) {
 
-			var modelCopy T
-
-			model, _ := ctx.Get("_eobj")
-			modelCopy = model.(T)
-
 			reqData := result.RequestData(ctx)
 
 			responseData := map[string]any{}
@@ -932,74 +1007,10 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				ctx.JSON(responseHttpCode, responseData)
 			}()
 
-			if result.TypeDataModel.SoftDeleteField.Has {
-				// soft removable items are not actually deleted
+			delResp := result.DeleteEntity(appctx, ctx, reqData)
 
-				// todo make it somewhat clear what is going on here
-				fname := result.TypeDataModel.SoftDeleteField.FillName
-				dto := gjson.Parse(fmt.Sprintf(`{"%s":1}`, fname))
-
-				reqData.log(func(logger *log.Logger) {
-					logger.Printf("filling soft removed field : %s", fname)
-				})
-
-				fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, dto, nil, reqData)
-
-				if fillError != nil {
-
-					responseData["msg"] = "fill object fields error"
-
-					if reqData.IsAdmin {
-						responseData["err"] = fillError.Error()
-					}
-
-					responseHttpCode = 500
-
-					return
-				}
-
-				updateErr := appctx.Db.Save(&modelCopy)
-				if updateErr != nil {
-
-					responseHttpCode = 500
-
-					responseData["msg"] = "unable to soft remove"
-
-					if reqData.IsAdmin {
-						responseData["err"] = updateErr.Error()
-					}
-
-					return
-				} else {
-
-					responseHttpCode = 200
-
-					responseData["ok"] = true
-					responseData["msg"] = "soft removed"
-
-					return
-				}
-
-			} else {
-
-				deleteError := appctx.Db.Delete(&modelCopy)
-				if deleteError != nil {
-
-					responseHttpCode = 500
-
-					responseData["msg"] = "unable to soft remove"
-
-					if reqData.IsAdmin {
-						responseData["err"] = deleteError.Error()
-					}
-
-					return
-				} else {
-					responseHttpCode = 200
-					responseData["ok"] = true
-				}
-			}
-
+			responseData = delResp.Data
+			responseHttpCode = delResp.Httpcode
 		})
 	}
 
