@@ -297,12 +297,7 @@ func SetListFilterHandler(fname string, h FilterOperationHandler) {
 	supportedFilters[fname] = h
 }
 
-func (result *CrudConfig[T, CtxType]) DeleteEntity(appctx *AppContext[CtxType], ctx *gin.Context, reqData RequestData) (respData *RespErr) {
-
-	var modelCopy T
-
-	model, _ := ctx.Get("_eobj")
-	modelCopy = model.(T)
+func (result *CrudConfig[T, CtxType]) DeleteEntity(appctx *AppContext[CtxType], modelCopy T, reqData RequestData) (respData *RespErr) {
 
 	responseData := respData.Data
 
@@ -1007,7 +1002,12 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				ctx.JSON(responseHttpCode, responseData)
 			}()
 
-			delResp := result.DeleteEntity(appctx, ctx, reqData)
+			var modelCopy T
+
+			model, _ := ctx.Get("_eobj")
+			modelCopy = model.(T)
+
+			delResp := result.DeleteEntity(appctx, modelCopy, reqData)
 
 			responseData = delResp.Data
 			responseHttpCode = delResp.Httpcode
