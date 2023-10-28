@@ -299,7 +299,9 @@ func SetListFilterHandler(fname string, h FilterOperationHandler) {
 
 func (result *CrudConfig[T, CtxType]) DeleteEntity(appctx *AppContext[CtxType], modelCopy T, reqData RequestData) (respData *RespErr) {
 
-	respData = &RespErr{}
+	respData = &RespErr{
+		Data: map[string]any{},
+	}
 
 	responseData := respData.Data
 
