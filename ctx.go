@@ -5,7 +5,6 @@ import (
 	"log"
 	"reflect"
 
-	"github.com/gin-gonic/gin"
 	"github.com/tidwall/gjson"
 	"gorm.io/gorm"
 )
@@ -72,8 +71,7 @@ func (r *RequestData) log_format(format string, args ...any) {
 }
 
 type AppContext[T any] struct {
-	Data    *T
-	Request *gin.Context
+	Data *T
 
 	Db DbWrapper[T]
 
@@ -89,6 +87,8 @@ type AppContext[T any] struct {
 func (d *AppContext[T]) OnCommit(cb func()) *AppContext[T] {
 
 	d.AfterCommit = append(d.AfterCommit, cb)
+
+	log.Printf(" cbs : %p", d.AfterCommit)
 
 	return d
 }
@@ -273,7 +273,11 @@ func (c AppContext[T]) DbTransaction(processor TransactionProcessor[T]) error {
 
 			isolatedCtx = c.isolateDatabase(tx)
 			isolatedCtx.isolated = true
-			return processor(isolatedCtx)
+			processed := processor(isolatedCtx)
+
+			log.Printf("after cb callbacks : %p : %d", isolatedCtx.AfterCommit, len(isolatedCtx.AfterCommit))
+
+			return processed
 		})
 
 		if result == nil {

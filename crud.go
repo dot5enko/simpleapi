@@ -392,8 +392,6 @@ func (result *CrudConfig[T, CtxType]) CreateEntity(appctx *AppContext[CtxType], 
 	createdErr := appctx.DbTransaction(func(isolatedContext AppContext[CtxType]) error {
 
 		// todo check if object is used somewhere
-		isolatedContext.Request = ctx
-
 		if result.objectCreate != nil {
 
 			crudCtx := CrudContext[T, CtxType]{
@@ -924,7 +922,6 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 			saveError := appctx.Db.Raw().Transaction(func(tx *gorm.DB) error {
 
 				isolatedContext := appctx.isolateDatabase(tx)
-				isolatedContext.Request = ctx
 
 				saveErr := isolatedContext.Db.Save(ref)
 
@@ -1050,9 +1047,8 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 		existingItems.GET("/"+cur.PathSuffix, func(ctx *gin.Context) {
 
 			isolated := &AppContext[CtxType]{
-				Db:      appctx.Db,
-				Data:    result.App.Data,
-				Request: ctx,
+				Db:   appctx.Db,
+				Data: result.App.Data,
 			}
 
 			cur.ItemHandler(isolated, &cur, result.RequestData(ctx))

@@ -3,8 +3,6 @@ package simpleapi
 import (
 	"encoding/json"
 	"testing"
-
-	"github.com/gin-gonic/gin"
 )
 
 func testToDto(t *testing.T) {
@@ -19,8 +17,7 @@ func testToDto(t *testing.T) {
 	tName := GetObjectType(event)
 
 	appCtx := AppContext[MockAppContext]{
-		Data:    &MockAppContext{},
-		Request: &gin.Context{},
+		Data: &MockAppContext{},
 	}
 
 	appCtx.SetObjectsMapping(map[string]FieldsMapping{
