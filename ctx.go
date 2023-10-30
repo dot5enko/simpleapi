@@ -13,8 +13,9 @@ import (
 func NewAppContext[T any](ctx *T) *AppContext[T] {
 
 	app := &AppContext[T]{
-		Data:    ctx,
-		objects: map[string]FieldsMapping{},
+		Data:        ctx,
+		objects:     map[string]FieldsMapping{},
+		AfterCommit: []func(){},
 	}
 
 	return app
@@ -81,6 +82,15 @@ type AppContext[T any] struct {
 	objects map[string]FieldsMapping
 
 	isolated bool
+
+	AfterCommit []func()
+}
+
+func (d *AppContext[T]) OnCommit(cb func()) *AppContext[T] {
+
+	d.AfterCommit = append(d.AfterCommit, cb)
+
+	return d
 }
 
 func (actx *AppContext[T]) SetObjectsMapping(omap map[string]FieldsMapping) {
@@ -256,12 +266,39 @@ func (c AppContext[T]) DbTransaction(processor TransactionProcessor[T]) error {
 	if c.isolated {
 		return processor(c)
 	} else {
-		return c.Db.Raw().Transaction(func(tx *gorm.DB) error {
 
-			isolatedCtx := c.isolateDatabase(tx)
+		var isolatedCtx AppContext[T]
+
+		result := c.Db.Raw().Transaction(func(tx *gorm.DB) error {
+
+			isolatedCtx = c.isolateDatabase(tx)
 			isolatedCtx.isolated = true
-
 			return processor(isolatedCtx)
 		})
+
+		if result == nil {
+			if len(isolatedCtx.AfterCommit) > 0 {
+
+				for _, it := range isolatedCtx.AfterCommit {
+					func() {
+
+						defer func() {
+							rec := recover()
+							if rec != nil {
+								log.Printf("unable to perform after commit callback : %v", rec)
+							}
+						}()
+
+						it()
+					}()
+				}
+
+			}
+		}
+
+		isolatedCtx.AfterCommit = []func(){}
+
+		return result
+
 	}
 }
