@@ -14,7 +14,7 @@ func NewAppContext[T any](ctx *T) *AppContext[T] {
 	app := &AppContext[T]{
 		Data:        ctx,
 		objects:     map[string]FieldsMapping{},
-		AfterCommit: []func(){},
+		AfterCommit: &[]func(){},
 	}
 
 	return app
@@ -81,12 +81,12 @@ type AppContext[T any] struct {
 
 	isolated bool
 
-	AfterCommit []func()
+	AfterCommit *[]func()
 }
 
 func (d *AppContext[T]) OnCommit(cb func()) *AppContext[T] {
 
-	d.AfterCommit = append(d.AfterCommit, cb)
+	*d.AfterCommit = append(*d.AfterCommit, cb)
 
 	log.Printf(" cbs : %p", d.AfterCommit)
 
@@ -273,17 +273,20 @@ func (c AppContext[T]) DbTransaction(processor TransactionProcessor[T]) error {
 
 			isolatedCtx = c.isolateDatabase(tx)
 			isolatedCtx.isolated = true
-			processed := processor(isolatedCtx)
+			
+			// do not use callbacks from parent if any
+			// how thats possible ?
+			*isolatedCtx.AfterCommit = []func(){}
 
-			log.Printf("after cb callbacks : %p : %d", isolatedCtx.AfterCommit, len(isolatedCtx.AfterCommit))
+			processed := processor(isolatedCtx)
 
 			return processed
 		})
 
 		if result == nil {
-			if len(isolatedCtx.AfterCommit) > 0 {
+			if len(*isolatedCtx.AfterCommit) > 0 {
 
-				for _, it := range isolatedCtx.AfterCommit {
+				for _, it := range *isolatedCtx.AfterCommit {
 					func() {
 
 						defer func() {
@@ -300,7 +303,7 @@ func (c AppContext[T]) DbTransaction(processor TransactionProcessor[T]) error {
 			}
 		}
 
-		isolatedCtx.AfterCommit = []func(){}
+		*isolatedCtx.AfterCommit = []func(){}
 
 		return result
 
