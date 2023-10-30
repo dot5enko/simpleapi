@@ -14,7 +14,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
-	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
 
@@ -919,11 +918,9 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				return
 			}
 
-			saveError := appctx.Db.Raw().Transaction(func(tx *gorm.DB) error {
+			saveError := appctx.DbTransaction(func(c AppContext[CtxType]) error {
 
-				isolatedContext := appctx.isolateDatabase(tx)
-
-				saveErr := isolatedContext.Db.Save(ref)
+				saveErr := c.Db.Save(ref)
 
 				// todo remove
 				if saveErr == nil {
@@ -937,7 +934,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 						req.log_format("processing extra update method for entity")
 
 						objUpdater, _ := any(ref).(OnUpdateEventHandler[CtxType, T])
-						updateEventError := objUpdater.OnUpdate(&isolatedContext, modelCopy, req)
+						updateEventError := objUpdater.OnUpdate(&c, modelCopy, req)
 						if updateEventError != nil {
 
 							req.log_format("rollback update due to OnUpdate: %s", updateEventError.Error())
