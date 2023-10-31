@@ -53,7 +53,16 @@ func WrapGormDb[T any](d *gorm.DB, ctx *AppContext[T]) DbWrapper[T] {
 }
 
 func (d DbWrapper[CtxType]) Raw() *gorm.DB {
-	return d.db
+
+	var dbRef *gorm.DB
+
+	if d.debug {
+		dbRef = d.db.Debug()
+	} else {
+		dbRef = d.db
+	}
+
+	return dbRef
 }
 
 func (d *DbWrapper[CtxType]) Debug(v bool) {
@@ -79,15 +88,7 @@ func _isolatedCreate[CtxType any](obj any, ctx AppContext[CtxType]) (err error) 
 		}
 	}
 
-	var dbRef *gorm.DB
-
-	if ctx.Db.debug {
-		dbRef = _db.Debug()
-	} else {
-		dbRef = _db
-	}
-
-	err = dbRef.Create(obj).Error
+	err = _db.Create(obj).Error
 
 	if err != nil {
 		return err
@@ -114,16 +115,8 @@ func _isolatedSaveOnlyFields[CtxType any](obj any, ctx AppContext[CtxType], fiel
 		}
 	}
 
-	var dbRef *gorm.DB
-
-	if ctx.Db.debug {
-		dbRef = _db.Debug()
-	} else {
-		dbRef = _db
-	}
-
 	if len(fields) > 0 {
-		err = dbRef.Select(fields).Updates(obj).Error
+		err = _db.Select(fields).Updates(obj).Error
 
 	} else {
 		err = _db.Save(obj).Error
@@ -155,15 +148,7 @@ func _isolatedSave[CtxType any](obj any, ctx AppContext[CtxType]) (err error) {
 		}
 	}
 
-	var dbRef *gorm.DB
-
-	if ctx.Db.debug {
-		dbRef = _db.Debug()
-	} else {
-		dbRef = _db
-	}
-
-	err = dbRef.Save(obj).Error
+	err = _db.Save(obj).Error
 
 	if err != nil {
 		return err
