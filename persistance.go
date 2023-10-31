@@ -79,7 +79,15 @@ func _isolatedCreate[CtxType any](obj any, ctx AppContext[CtxType]) (err error) 
 		}
 	}
 
-	err = _db.Create(obj).Error
+	var dbRef *gorm.DB
+
+	if ctx.Db.debug {
+		dbRef = _db.Debug()
+	} else {
+		dbRef = _db
+	}
+
+	err = dbRef.Create(obj).Error
 
 	if err != nil {
 		return err
@@ -89,6 +97,47 @@ func _isolatedCreate[CtxType any](obj any, ctx AppContext[CtxType]) (err error) 
 	_obj, ok := obj.(AfterCreateCbAware[CtxType])
 	if ok {
 		return _obj.AfterEntityCreate(&ctx)
+	}
+
+	return nil
+}
+
+func _isolatedSaveOnlyFields[CtxType any](obj any, ctx AppContext[CtxType], fields []string) (err error) {
+
+	_db := ctx.Db.Raw()
+
+	__obj, ok := obj.(OnBeforeUpdateCbAware[CtxType])
+	if ok {
+		beforeUpdateCbErr := __obj.BeforeUpdate(&ctx)
+		if beforeUpdateCbErr != nil {
+			return beforeUpdateCbErr
+		}
+	}
+
+	var dbRef *gorm.DB
+
+	if ctx.Db.debug {
+		dbRef = _db.Debug()
+	} else {
+		dbRef = _db
+	}
+
+	if len(fields) > 0 {
+		err = dbRef.Select(fields).Updates(obj).Error
+
+	} else {
+		err = _db.Save(obj).Error
+	}
+
+	if err != nil {
+		return err
+	}
+
+	// check after event
+	// should be executed after transaction commit
+	_obj, ok := obj.(OnAfterUpdateCbAware[CtxType])
+	if ok {
+		return _obj.AfterUpdate(&ctx)
 	}
 
 	return nil
@@ -106,61 +155,15 @@ func _isolatedSave[CtxType any](obj any, ctx AppContext[CtxType]) (err error) {
 		}
 	}
 
-	// isCreate := false
+	var dbRef *gorm.DB
 
-	// {
-	// 	// detect save or update
+	if ctx.Db.debug {
+		dbRef = _db.Debug()
+	} else {
+		dbRef = _db
+	}
 
-	// 	tx := _db
-	// 	tx.Statement.Dest = obj
-
-	// 	reflectValue := reflect.Indirect(reflect.ValueOf(obj))
-	// 	for reflectValue.Kind() == reflect.Ptr || reflectValue.Kind() == reflect.Interface {
-	// 		reflectValue = reflect.Indirect(reflectValue)
-	// 	}
-
-	// 	switch reflectValue.Kind() {
-	// 	case reflect.Struct:
-	// 		if err := _db.Statement.Parse(obj); err == nil && _db.Statement.Schema != nil {
-	// 			for _, pf := range _db.Statement.Schema.PrimaryFields {
-	// 				if _, isZero := pf.ValueOf(_db.Statement.Context, reflectValue); isZero {
-	// 					isCreate = true
-	// 				}
-	// 			}
-	// 		}
-	// 	}
-	// }
-
-	// if isCreate {
-
-	// 	{
-	// 		__obj, ok := obj.(BeforeCreateCbAware[CtxType])
-	// 		if ok {
-	// 			cb := __obj.BeforeEntityCreate(&ctx)
-	// 			if cb != nil {
-	// 				return cb
-	// 			}
-	// 		}
-	// 	}
-
-	// 	err = _db.Create(obj).Error
-	// 	if err != nil {
-	// 		return err
-	// 	}
-
-	// 	{
-	// 		__obj, ok := obj.(AfterCreateCbAware[CtxType])
-	// 		if ok {
-	// 			cb := __obj.AfterEntityCreate(&ctx)
-	// 			if cb != nil {
-	// 				return cb
-	// 			}
-	// 		}
-	// 	}
-
-	// } else {
-	err = _db.Save(obj).Error
-	// }
+	err = dbRef.Save(obj).Error
 
 	if err != nil {
 		return err
@@ -174,6 +177,17 @@ func _isolatedSave[CtxType any](obj any, ctx AppContext[CtxType]) (err error) {
 	}
 
 	return nil
+}
+
+func (d DbWrapper[CtxType]) UpdateFields(obj any, fields ...string) (err error) {
+
+	if d.app.isolated {
+		return _isolatedSaveOnlyFields(obj, *d.app, fields)
+	}
+
+	return d.db.Transaction(func(tx *gorm.DB) error {
+		return _isolatedSaveOnlyFields(obj, d.app.isolateDatabase(tx), fields)
+	})
 }
 
 func (d DbWrapper[CtxType]) Save(obj any) (err error) {

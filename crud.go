@@ -311,9 +311,7 @@ func (result *CrudConfig[T, CtxType]) DeleteEntity(appctx *AppContext[CtxType], 
 		fname := result.TypeDataModel.SoftDeleteField.FillName
 		dto := gjson.Parse(fmt.Sprintf(`{"%s":1}`, fname))
 
-		reqData.log(func(logger *log.Logger) {
-			logger.Printf("filling soft removed field : %s", fname)
-		})
+		reqData.log_format("filling soft removed field : %s", fname)
 
 		fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, dto, nil, reqData)
 
@@ -330,7 +328,8 @@ func (result *CrudConfig[T, CtxType]) DeleteEntity(appctx *AppContext[CtxType], 
 			return
 		}
 
-		updateErr := appctx.Db.Save(&modelCopy)
+		// update only selected fields
+		updateErr := appctx.Db.UpdateFields(&modelCopy, result.TypeDataModel.SoftDeleteField.TableColumnName)
 		if updateErr != nil {
 
 			respData.Httpcode = 500
