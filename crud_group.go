@@ -12,8 +12,11 @@ type HasPermissionChecker[T any] func(req *gin.Context, ctx *AppContext[T]) bool
 type CrudGroupConfig[T any] struct {
 	ObjectIdFieldName string
 
-	WritePermission      *HasPermissionChecker[T]
-	ReadPermission       *HasPermissionChecker[T]
+	WritePermission *HasPermissionChecker[T]
+	ReadPermission  *HasPermissionChecker[T]
+
+	FilterOverrider func(RequestData)
+
 	RequestDataGenerator func(g *gin.Context, ctx *AppContext[T]) RequestData
 }
 

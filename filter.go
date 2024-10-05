@@ -169,7 +169,6 @@ func prepareFilterData[T any, CtxType any](
 			if filtersMap[userBoundField] == "*" {
 				delete(filtersMap, userBoundField)
 			}
-
 		}
 
 		if !skipUserField {

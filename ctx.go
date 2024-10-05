@@ -273,7 +273,7 @@ func (c AppContext[T]) DbTransaction(processor TransactionProcessor[T]) error {
 
 			isolatedCtx = c.isolateDatabase(tx)
 			isolatedCtx.isolated = true
-			
+
 			// do not use callbacks from parent if any
 			// how thats possible ?
 			*isolatedCtx.AfterCommit = []func(){}
