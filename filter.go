@@ -3,7 +3,6 @@ package simpleapi
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"reflect"
 	"strings"
 
@@ -22,9 +21,10 @@ func (c complexFilter[T]) RelFieldName(name string) string {
 }
 
 type filterData[CtxType any] struct {
-	_filter          map[string]any
-	QueryPlaceholder string
-	Args             []any
+	// _filter map[string]any
+
+	Compiled    bool
+	FilterPairs []SqlFilterPair
 
 	ComplexFilters []complexFilter[CtxType]
 
@@ -109,6 +109,11 @@ func processFilterValueToSqlCond(tableName string, filterValue any, userAuthData
 	return
 }
 
+type SqlFilterPair struct {
+	Condition string
+	Arg       any
+}
+
 func prepareFilterData[T any, CtxType any](
 	filtersMap HM,
 	crudConfig *CrudConfig[T, CtxType],
@@ -119,12 +124,14 @@ func prepareFilterData[T any, CtxType any](
 
 	complexFilters := []complexFilter[CtxType]{}
 
-	filtersSqlWithPlaceholders := ""
+	// filtersSqlWithPlaceholders := ""
 
 	hasDisabledFields := len(crudConfig.disableFilterOverFields) > 0
 
-	parts := []string{}
-	filterArgs := []any{}
+	filterParts := []SqlFilterPair{}
+
+	// parts := []string{}
+	// filterArgs := []any{}
 
 	softdeleteField := ""
 	keepSoftDeleted := false
@@ -258,17 +265,16 @@ func prepareFilterData[T any, CtxType any](
 		if filterProcessErr != nil {
 			userAuthData.log_format("unable to process filter %s value: %s ", filterFieldName, filterProcessErr.Error())
 		} else {
-			parts = append(parts, sqlPart)
-			filterArgs = append(filterArgs, sqlArg)
+			// parts = append(parts, sqlPart)
+			// filterArgs = append(filterArgs, sqlArg)
+
+			filterParts = append(filterParts, SqlFilterPair{
+				Condition: sqlPart,
+				Arg:       sqlArg,
+			})
+
 		}
 	}
-
-	filtersSqlWithPlaceholders = strings.Join(parts, " AND ")
-
-	userAuthData.log(func(logger *log.Logger) {
-		logger.Print("filter SQL:")
-		logger.Printf("`%s` + args %v", filtersSqlWithPlaceholders, filterArgs)
-	})
 
 	curPage := listQueryParams.Page
 	if curPage <= 0 {
@@ -293,12 +299,42 @@ func prepareFilterData[T any, CtxType any](
 	}
 
 	return typed.ResultOk(filterData[CtxType]{
-		QueryPlaceholder: filtersSqlWithPlaceholders,
-		Args:             filterArgs,
-		Limit:            limitVal,
-		Offset:           offsetVal,
-		PerPage:          int(perPageVal),
-		ComplexFilters:   complexFilters,
-		_filter:          filtersMap,
+		// QueryPlaceholder: filtersSqlWithPlaceholders,
+		// Args:             filterArgs,
+		Limit:          limitVal,
+		Offset:         offsetVal,
+		PerPage:        int(perPageVal),
+		ComplexFilters: complexFilters,
+		// _filter:        filtersMap,
 	})
+}
+
+type CompiledData struct {
+	QueryPlaceholder string
+	Args             []any
+}
+
+func (d *filterData[CtxType]) Compile() CompiledData {
+
+	parts := []string{}
+	args := []any{}
+
+	result := CompiledData{}
+
+	for _, it := range d.FilterPairs {
+		parts = append(parts, it.Condition)
+		args = append(args, it.Arg)
+	}
+
+	result.QueryPlaceholder = strings.Join(parts, " AND ")
+	result.Args = args
+
+	d.Compiled = true
+
+	// userAuthData.log(func(logger *log.Logger) {
+	// 	logger.Print("filter SQL:")
+	// 	logger.Printf("`%s` + args %v", filtersSqlWithPlaceholders, filterArgs)
+	// })
+
+	return result
 }

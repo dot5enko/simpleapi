@@ -70,7 +70,9 @@ func (result *CrudConfig[T, CtxType]) GenerateListEndpoint(
 			filterProcessor(&filterData)
 		}
 
-		filtersSql := filterData.QueryPlaceholder
+		compiledFilter := filterData.Compile()
+
+		filtersSql := compiledFilter.QueryPlaceholder
 
 		totalItems := int64(0)
 
@@ -137,7 +139,7 @@ func (result *CrudConfig[T, CtxType]) GenerateListEndpoint(
 			dbQ := appctx.Db.Raw()
 
 			finalSQLConds := filtersSql
-			finalArgs := filterData.Args
+			finalArgs := compiledFilter.Args
 
 			if joinClauseWhereCond != "" {
 				finalSQLConds += " AND " + joinClauseWhereCond
