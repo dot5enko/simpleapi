@@ -74,6 +74,14 @@ type CrudConfig[T any, CtxType any] struct {
 	predefinedQueries map[string]predefinedQuery
 }
 
+func (it *CrudConfig[T, CtxType]) TableName() string {
+	return it.tableName
+}
+
+func (it *CrudConfig[T, CtxType]) IdFieldName() string {
+	return it.primaryIdDbName
+}
+
 type PagingConfig struct {
 	PerPage int
 }
