@@ -82,6 +82,10 @@ func (it *CrudConfig[T, CtxType]) IdFieldName() string {
 	return it.primaryIdDbName
 }
 
+func (it *CrudConfig[T, CtxType]) ObjectIdField() string {
+	return it.objectIdField
+}
+
 type PagingConfig struct {
 	PerPage int
 }
