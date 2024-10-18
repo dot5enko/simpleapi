@@ -23,6 +23,8 @@ github.com/dot5enko/typed v1.0.72 h1:EEZoApKG2bwiJpRALVx/qSaJUOIsPlDTQFcuhX/600g
 github.com/dot5enko/typed v1.0.72/go.mod h1:qI1aYSgysz8Z0ZSVY45IAoLHGjktCOQs010LL2XZfEs=
 github.com/dot5enko/typed v1.0.73 h1:Z92TH3VMrhlNCfcZ/fr+oQMos8AfgP88Yw9eU9ovhwE=
 github.com/dot5enko/typed v1.0.73/go.mod h1:qI1aYSgysz8Z0ZSVY45IAoLHGjktCOQs010LL2XZfEs=
+github.com/dot5enko/typed v1.0.74 h1:Km6oFYqr4D5vgz5rkcW969NakxFn7cKeaQVgazlBwM8=
+github.com/dot5enko/typed v1.0.74/go.mod h1:qI1aYSgysz8Z0ZSVY45IAoLHGjktCOQs010LL2XZfEs=
 github.com/dot5enko/typed v1.1.0 h1:VNCNfOaPYn3iS9u2C5VHS/+dIL0ywU5vSHUsBR7fLEg=
 github.com/dot5enko/typed v1.1.0/go.mod h1:qI1aYSgysz8Z0ZSVY45IAoLHGjktCOQs010LL2XZfEs=
 github.com/gabriel-vasile/mimetype v1.4.2 h1:w5qFW6JKBz9Y393Y4q372O9A7cUSequkh1Q7OhCmWKU=
