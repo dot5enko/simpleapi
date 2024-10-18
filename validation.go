@@ -345,7 +345,7 @@ func (m FieldsMapping) ToDto(obj any, req RequestData) map[string]any {
 
 	result := map[string]any{}
 
-	reflected := reflect.ValueOf(obj)
+	reflected := reflect.Indirect(reflect.ValueOf(obj))
 
 	for _, fieldName := range m.Outable {
 
