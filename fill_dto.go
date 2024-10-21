@@ -91,7 +91,7 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req Reques
 			}
 		}
 
-		if isSupportedType {
+		if !isSupportedType {
 			req.log_format("[%s] field has unsupported array type : %s", *fieldInfo.Name, elementType)
 			err = ErrUnsupportedSliceFilterArgType
 			return
