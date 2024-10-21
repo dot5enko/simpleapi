@@ -11,6 +11,10 @@ import (
 	"github.com/tidwall/gjson"
 )
 
+var (
+	ErrUnsupportedSliceFilterArgType = fmt.Errorf("unsupported slice arg type")
+)
+
 // not in use
 // as gorm doesn't support arbitrary types too :)
 type DtoFieldTypeProcessor[T any] struct {
@@ -35,6 +39,10 @@ func stackToLog(prefix string, loggr *log.Logger) {
 		}
 	}
 
+}
+
+var supportedSliceTypes = []reflect.Kind{
+	reflect.Uint64, reflect.Int64, reflect.Int, reflect.Uint, reflect.Int32, reflect.Uint32, reflect.Int16, reflect.Uint16, reflect.Uint8, reflect.Int8,
 }
 
 func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req RequestData) (result any, err error) {
@@ -72,8 +80,21 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req Reques
 
 		elementType := fieldType.Elem()
 
-		if elementType.Kind() != reflect.Uint64 {
+		isSupportedType := false
+
+		ekind := elementType.Kind()
+
+		for _, supIt := range supportedSliceTypes {
+			if supIt == ekind {
+				isSupportedType = true
+				break
+			}
+		}
+
+		if isSupportedType {
 			req.log_format("[%s] field has unsupported array type : %s", *fieldInfo.Name, elementType)
+			err = ErrUnsupportedSliceFilterArgType
+			return
 		} else {
 
 			result := []uint64{}
