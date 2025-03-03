@@ -73,7 +73,9 @@ func (r *RequestData) log_format(format string, args ...any) {
 type AppContext[T any] struct {
 	Data *T
 
-	hiddenData any
+	// hiddenData any
+
+	LogFunc func(msg string, args ...any)
 
 	Db DbWrapper[T]
 
@@ -86,13 +88,13 @@ type AppContext[T any] struct {
 	AfterCommit *[]func()
 }
 
-func (d *AppContext[T]) SetHidden(val any) {
-	d.hiddenData = val
-}
+// func (d *AppContext[T]) SetHidden(val any) {
+// 	d.hiddenData = val
+// }
 
-func (d *AppContext[T]) GetHidden() any {
-	return d.hiddenData
-}
+// func (d *AppContext[T]) GetHidden() any {
+// 	return d.hiddenData
+// }
 
 func (d *AppContext[T]) OnCommit(cb func()) *AppContext[T] {
 
