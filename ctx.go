@@ -73,6 +73,8 @@ func (r *RequestData) log_format(format string, args ...any) {
 type AppContext[T any] struct {
 	Data *T
 
+	hiddenData any
+
 	Db DbWrapper[T]
 
 	AppRequest RequestData
@@ -82,6 +84,14 @@ type AppContext[T any] struct {
 	isolated bool
 
 	AfterCommit *[]func()
+}
+
+func (d *AppContext[T]) SetHidden(val any) {
+	d.hiddenData = val
+}
+
+func (d *AppContext[T]) GetHidden() any {
+	return d.hiddenData
 }
 
 func (d *AppContext[T]) OnCommit(cb func()) *AppContext[T] {
@@ -273,7 +283,7 @@ func (c AppContext[T]) DbTransaction(processor TransactionProcessor[T]) error {
 
 			isolatedCtx = c.isolateDatabase(tx)
 			isolatedCtx.isolated = true
-			
+
 			// do not use callbacks from parent if any
 			// how thats possible ?
 			*isolatedCtx.AfterCommit = []func(){}
