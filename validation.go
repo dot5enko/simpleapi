@@ -116,7 +116,7 @@ func checkFieldUniqueAndRegister(mp map[string]bool, fname string) bool {
 	}
 }
 
-func GetFieldTags[CtxType any, T any](obj T) (objMapp FieldsMapping) {
+func GetFieldTags[T any](obj T) (objMapp FieldsMapping) {
 
 	objMapp.Fields = make(map[string]ApiTags)
 
@@ -133,13 +133,13 @@ func GetFieldTags[CtxType any, T any](obj T) (objMapp FieldsMapping) {
 
 	// check interfaces here once for app run
 	{
-		_, additionalFill := any(obj).(ApiDtoFillable[CtxType])
+		_, additionalFill := any(obj).(ApiDtoFillable)
 		objMapp.FillExtraMethod = additionalFill
 
-		_, additionalDto := any(obj).(ApiDto[CtxType])
+		_, additionalDto := any(obj).(ApiDto)
 		objMapp.OutExtraMethod = additionalDto
 
-		_, additionalOnUpdate := any(obj).(OnUpdateEventHandler[CtxType, T])
+		_, additionalOnUpdate := any(obj).(OnUpdateEventHandler[T])
 		objMapp.UpdateExtraMethod = additionalOnUpdate
 
 		// log.Printf(" -- type %s : extra out : %v, extra fill : %v. onupdate : %v", _type.Name(), additionalDto, additionalFill, additionalOnUpdate)

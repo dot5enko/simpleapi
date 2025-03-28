@@ -4,7 +4,7 @@ import "github.com/gin-gonic/gin"
 
 type RequestContext[T any, X any] struct {
 	Http *gin.Context
-	App  *AppContext[X]
+	App  *AppContext
 	Data *T
 }
 
@@ -24,7 +24,7 @@ func (handlers *HandlersChain[T, X]) Use(h ...RequestHandler[T, X]) {
 	*handlers = append(*handlers, h...)
 }
 
-func (handlers HandlersChain[T, X]) ProcessRequest(ginCtx *gin.Context, app *AppContext[X], requestCtx *T) {
+func (handlers HandlersChain[T, X]) ProcessRequest(ginCtx *gin.Context, app *AppContext, requestCtx *T) {
 
 	ourCtx := &RequestContext[T, X]{
 		Http: ginCtx,

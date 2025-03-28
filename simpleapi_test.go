@@ -16,9 +16,7 @@ func testToDto(t *testing.T) {
 	fields := GetFieldTags[MockAppContext, MockEvent](event)
 	tName := GetObjectType(event)
 
-	appCtx := AppContext[MockAppContext]{
-		Data: &MockAppContext{},
-	}
+	appCtx := AppContext{}
 
 	appCtx.SetObjectsMapping(map[string]FieldsMapping{
 		tName: fields,

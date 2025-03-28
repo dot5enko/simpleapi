@@ -9,10 +9,9 @@ import (
 	"gorm.io/gorm"
 )
 
-func NewAppContext[T any](ctx *T) *AppContext[T] {
+func NewAppContext() *AppContext {
 
-	app := &AppContext[T]{
-		Data:        ctx,
+	app := &AppContext{
 		objects:     map[string]FieldsMapping{},
 		AfterCommit: &[]func(){},
 	}
@@ -70,14 +69,14 @@ func (r *RequestData) log_format(format string, args ...any) {
 	}
 }
 
-type AppContext[T any] struct {
-	Data *T
+type AppContext struct {
+	Data any
 
 	// hiddenData any
 
 	LogFunc func(msg string, args ...any)
 
-	Db DbWrapper[T]
+	Db DbWrapper
 
 	AppRequest RequestData
 
@@ -88,15 +87,15 @@ type AppContext[T any] struct {
 	AfterCommit *[]func()
 }
 
-// func (d *AppContext[T]) SetHidden(val any) {
+// func (d *AppContext) SetHidden(val any) {
 // 	d.hiddenData = val
 // }
 
-// func (d *AppContext[T]) GetHidden() any {
+// func (d *AppContext) GetHidden() any {
 // 	return d.hiddenData
 // }
 
-func (d *AppContext[T]) OnCommit(cb func()) *AppContext[T] {
+func (d *AppContext) OnCommit(cb func()) *AppContext {
 
 	*d.AfterCommit = append(*d.AfterCommit, cb)
 
@@ -105,11 +104,11 @@ func (d *AppContext[T]) OnCommit(cb func()) *AppContext[T] {
 	return d
 }
 
-func (actx *AppContext[T]) SetObjectsMapping(omap map[string]FieldsMapping) {
+func (actx *AppContext) SetObjectsMapping(omap map[string]FieldsMapping) {
 	actx.objects = omap
 }
 
-func (actx AppContext[T]) ApiData(object any) FieldsMapping {
+func (actx AppContext) ApiData(object any) FieldsMapping {
 	objTypeName := GetObjectType(object)
 	rules, ok := actx.objects[objTypeName]
 
@@ -124,11 +123,11 @@ var (
 	ErrNumberOverflow = fmt.Errorf("field value overflows type")
 )
 
-func (c AppContext[T]) RegisteredTypes() map[string]FieldsMapping {
+func (c AppContext) RegisteredTypes() map[string]FieldsMapping {
 	return c.objects
 }
 
-func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, dto gjson.Result, options *FillFromDtoOptions, req RequestData) (err error) {
+func (c AppContext) FillEntityFromDto(modelTypeData FieldsMapping, obj any, dto gjson.Result, options *FillFromDtoOptions, req RequestData) (err error) {
 
 	m := modelTypeData
 
@@ -220,7 +219,7 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 			logger.Printf(" has fill extra method, processing")
 		})
 
-		modelFillable, _ := any(obj).(ApiDtoFillable[T])
+		modelFillable, _ := any(obj).(ApiDtoFillable)
 
 		// todo move in transaction
 		return modelFillable.FromDto(dto, &c)
@@ -231,7 +230,7 @@ func (c AppContext[T]) FillEntityFromDto(modelTypeData FieldsMapping, obj any, d
 
 type MigrateInitializer func(object any) FieldsMapping
 
-func (c DbWrapper[T]) MigrateWithOnUpdate(object any, initalizer MigrateInitializer) {
+func (c DbWrapper) MigrateWithOnUpdate(object any, initalizer MigrateInitializer) {
 
 	m := c.db.Migrator()
 
@@ -243,13 +242,13 @@ func (c DbWrapper[T]) MigrateWithOnUpdate(object any, initalizer MigrateInitiali
 	c.app.objects[objTypeName] = el
 }
 
-func (c DbWrapper[T]) MigrateAll(objects ...any) {
+func (c DbWrapper) MigrateAll(objects ...any) {
 	for _, it := range objects {
 		Migrate(c, it)
 	}
 }
 
-func Migrate[T any, ObjectT any](c DbWrapper[T], object ObjectT) {
+func Migrate[ObjectT any](c DbWrapper, object ObjectT) {
 
 	if c.automigrate {
 		m := c.db.Migrator()
@@ -257,12 +256,12 @@ func Migrate[T any, ObjectT any](c DbWrapper[T], object ObjectT) {
 	}
 
 	objTypeName := GetObjectType(object)
-	el := GetFieldTags[T](object)
+	el := GetFieldTags(object)
 	el.TypeName = objTypeName
 	c.app.objects[objTypeName] = el
 }
 
-func (c AppContext[T]) isolateDatabase(isolatedDb *gorm.DB) AppContext[T] {
+func (c AppContext) isolateDatabase(isolatedDb *gorm.DB) AppContext {
 
 	result := c
 	result.Db.setRaw(isolatedDb)
@@ -271,15 +270,15 @@ func (c AppContext[T]) isolateDatabase(isolatedDb *gorm.DB) AppContext[T] {
 }
 
 // a little bit of abstractions
-type TransactionProcessor[T any] func(c AppContext[T]) error
+type TransactionProcessor func(c AppContext) error
 
-func (c AppContext[T]) DbTransaction(processor TransactionProcessor[T]) error {
+func (c AppContext) DbTransaction(processor TransactionProcessor) error {
 
 	if c.isolated {
 		return processor(c)
 	} else {
 
-		var isolatedCtx AppContext[T]
+		var isolatedCtx AppContext
 
 		result := c.Db.Raw().Transaction(func(tx *gorm.DB) error {
 

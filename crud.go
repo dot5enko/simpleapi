@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/dot5enko/typed"
+	"github.com/cldfn/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/tidwall/gjson"
@@ -24,7 +24,7 @@ var (
 
 type CrudContext[T any, CtxType any] struct {
 	Crud *CrudConfig[T, CtxType]
-	App  *AppContext[CtxType]
+	App  *AppContext
 }
 
 type ModelIdFetcher[T any] func(obj *T) uint64
@@ -38,7 +38,7 @@ type HM = map[string]any
 type CrudConfig[T any, CtxType any] struct {
 	ParentGroup *gin.RouterGroup
 	Model       T
-	App         *AppContext[CtxType]
+	App         *AppContext
 	CrudGroup   *CrudGroup[CtxType]
 
 	disableEndpoints EndpointsDisableConfig
@@ -48,13 +48,13 @@ type CrudConfig[T any, CtxType any] struct {
 
 	TypeDataModel FieldsMapping
 
-	requestDataGeneratorOverride func(g *gin.Context, ctx *AppContext[CtxType]) RequestData
+	requestDataGeneratorOverride func(g *gin.Context, ctx *AppContext) RequestData
 
 	existing     []gin.HandlerFunc
 	beforeCreate []gin.HandlerFunc
 
 	objectCreate func(ctx CrudContext[T, CtxType], obj *T) error
-	afterCreate  func(ctx *AppContext[CtxType], obj *T) error
+	afterCreate  func(ctx *AppContext, obj *T) error
 
 	relTypeTable string
 
@@ -99,7 +99,7 @@ type HasManyConfig[T any] struct {
 	InputTransformer DataTransformer[T]
 }
 
-type DataTransformer[T any] func(ctx *AppContext[T], input any) (output any)
+type DataTransformer[T any] func(ctx *AppContext, input any) (output any)
 
 func (it *CrudConfig[T, CtxType]) FieldFilter(filter_name string, relTable string, dest_field, cur_field string, inputTransformer DataTransformer[CtxType]) *CrudConfig[T, CtxType] {
 
@@ -161,7 +161,7 @@ func (it *CrudConfig[T, CtxType]) IdField(fieldName string) *CrudConfig[T, CtxTy
 	return it
 }
 
-func (it *CrudConfig[T, CtxType]) AdminCheck(init func(g *gin.Context, ctx *AppContext[CtxType]) RequestData) *CrudConfig[T, CtxType] {
+func (it *CrudConfig[T, CtxType]) AdminCheck(init func(g *gin.Context, ctx *AppContext) RequestData) *CrudConfig[T, CtxType] {
 
 	it.requestDataGeneratorOverride = init
 
@@ -204,7 +204,7 @@ func (it *CrudConfig[T, CtxType]) OnObjectCreate(h func(crudContext CrudContext[
 	return it
 }
 
-type RelatedObjectHandlerInit[T any, CtxType any] func(appctx *AppContext[CtxType], config *ApiObjectRelation[T, CtxType], req RequestData)
+type RelatedObjectHandlerInit[T any, CtxType any] func(appctx *AppContext, config *ApiObjectRelation[T, CtxType], req RequestData)
 
 type ApiObjectRelation[RelatedToType any, CtxType any] struct {
 	PathSuffix          string
@@ -219,7 +219,7 @@ func (it *CrudConfig[T, CtxType]) HasMultiple(relations ...ApiObjectRelation[T, 
 	return it
 }
 
-func (it *CrudConfig[T, CtxType]) OnAfterCreate(h func(appctx *AppContext[CtxType], obj *T) error) *CrudConfig[T, CtxType] {
+func (it *CrudConfig[T, CtxType]) OnAfterCreate(h func(appctx *AppContext, obj *T) error) *CrudConfig[T, CtxType] {
 	it.afterCreate = h
 	return it
 }
@@ -308,7 +308,7 @@ func SetListFilterHandler(fname string, h FilterOperationHandler) {
 	supportedFilters[fname] = h
 }
 
-func (result *CrudConfig[T, CtxType]) DeleteEntity(appctx *AppContext[CtxType], modelCopy T, reqData RequestData) (respData *RespErr) {
+func (result *CrudConfig[T, CtxType]) DeleteEntity(appctx *AppContext, modelCopy T, reqData RequestData) (respData *RespErr) {
 
 	respData = &RespErr{
 		Data: map[string]any{},
@@ -386,7 +386,7 @@ func (result *CrudConfig[T, CtxType]) DeleteEntity(appctx *AppContext[CtxType], 
 	return
 }
 
-func (result *CrudConfig[T, CtxType]) CreateEntity(appctx *AppContext[CtxType], ctx *gin.Context, parsedJson gjson.Result, reqData RequestData) (objectCreated T, respData *RespErr) {
+func (result *CrudConfig[T, CtxType]) CreateEntity(appctx *AppContext, ctx *gin.Context, parsedJson gjson.Result, reqData RequestData) (objectCreated T, respData *RespErr) {
 	var modelCopy T
 
 	fillError := appctx.FillEntityFromDto(result.TypeDataModel, &modelCopy, parsedJson, nil, reqData)
@@ -399,7 +399,7 @@ func (result *CrudConfig[T, CtxType]) CreateEntity(appctx *AppContext[CtxType], 
 		return
 	}
 
-	createdErr := appctx.DbTransaction(func(isolatedContext AppContext[CtxType]) error {
+	createdErr := appctx.DbTransaction(func(isolatedContext AppContext) error {
 
 		// todo check if object is used somewhere
 		if result.objectCreate != nil {
@@ -929,7 +929,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				return
 			}
 
-			saveError := appctx.DbTransaction(func(c AppContext[CtxType]) error {
+			saveError := appctx.DbTransaction(func(c AppContext) error {
 
 				saveErr := c.Db.Save(ref)
 
@@ -944,7 +944,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 						req.log_format("processing extra update method for entity")
 
-						objUpdater, _ := any(ref).(OnUpdateEventHandler[CtxType, T])
+						objUpdater, _ := any(ref).(OnUpdateEventHandler[T])
 						updateEventError := objUpdater.OnUpdate(&c, modelCopy, req)
 						if updateEventError != nil {
 
@@ -968,9 +968,9 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 				if req.Debug {
 					repsJson["err"] = saveError.Error()
 
-					panickedErr, ok := saveError.(typed.PanickedError)
+					panickedErr, ok := saveError.(utils.HasStack)
 					if ok {
-						repsJson["stack"] = panickedErr.Cause
+						repsJson["stack"] = panickedErr.Stack()
 					}
 
 					repsJson["logs"] = debugLogs.lines
@@ -1054,7 +1054,7 @@ func (result *CrudConfig[T, CtxType]) Generate() *CrudConfig[T, CtxType] {
 
 		existingItems.GET("/"+cur.PathSuffix, func(ctx *gin.Context) {
 
-			isolated := &AppContext[CtxType]{
+			isolated := &AppContext{
 				Db:   appctx.Db,
 				Data: result.App.Data,
 			}

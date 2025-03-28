@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/dot5enko/typed"
+	typed "github.com/cldfn/utils"
 	"github.com/google/uuid"
 )
 
@@ -24,7 +24,7 @@ var (
 	ErrUserNotExists       = fmt.Errorf("user not exists, this shoult not happen")
 )
 
-func GetTokenOrCreate[CtxType any](appctx *AppContext[CtxType], user UserFeatures, expiry time.Duration) (result typed.Result[AccessToken]) {
+func GetTokenOrCreate(appctx *AppContext, user UserFeatures, expiry time.Duration) (result typed.Result[AccessToken]) {
 
 	tNow := time.Now()
 	var obj AccessToken
@@ -53,7 +53,7 @@ func GetTokenOrCreate[CtxType any](appctx *AppContext[CtxType], user UserFeature
 	}
 }
 
-func UserByToken[UserType any, T any](appCtx *AppContext[T], tok string) (result typed.Result[UserType]) {
+func UserByToken[UserType any, T any](appCtx *AppContext, tok string) (result typed.Result[UserType]) {
 
 	var err error
 	var resultToken AccessToken

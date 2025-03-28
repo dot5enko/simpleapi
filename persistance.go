@@ -3,47 +3,47 @@ package simpleapi
 import (
 	"fmt"
 
-	"github.com/dot5enko/typed"
+	typed "github.com/cldfn/utils"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
-type BeforeCreateCbAware[CtxType any] interface {
-	BeforeEntityCreate(ctx *AppContext[CtxType]) error
+type BeforeCreateCbAware interface {
+	BeforeEntityCreate(ctx *AppContext) error
 }
 
-type AfterCreateCbAware[CtxType any] interface {
-	AfterEntityCreate(ctx *AppContext[CtxType]) error
+type AfterCreateCbAware interface {
+	AfterEntityCreate(ctx *AppContext) error
 }
 
-type OnAfterUpdateCbAware[CtxType any] interface {
-	AfterUpdate(ctx *AppContext[CtxType]) error
+type OnAfterUpdateCbAware interface {
+	AfterUpdate(ctx *AppContext) error
 }
 
-type OnBeforeUpdateCbAware[CtxType any] interface {
-	BeforeUpdate(ctx *AppContext[CtxType]) error
+type OnBeforeUpdateCbAware interface {
+	BeforeUpdate(ctx *AppContext) error
 }
 
-type OnUpdateEventHandler[CtxType any, T any] interface {
-	OnUpdate(ctx *AppContext[CtxType], prevState T, permission RequestData) error
+type OnUpdateEventHandler[T any] interface {
+	OnUpdate(ctx *AppContext, prevState T, permission RequestData) error
 }
 
-type DbWrapper[CtxType any] struct {
+type DbWrapper struct {
 	db    *gorm.DB
 	topDb *gorm.DB
 
-	app         *AppContext[CtxType]
+	app         *AppContext
 	debug       bool
 	automigrate bool
 }
 
-func (d DbWrapper[CtxType]) Automigrate(v bool) DbWrapper[CtxType] {
+func (d DbWrapper) Automigrate(v bool) DbWrapper {
 	d.automigrate = v
 	return d
 }
 
-func WrapGormDb[T any](d *gorm.DB, ctx *AppContext[T]) DbWrapper[T] {
-	return DbWrapper[T]{
+func WrapGormDb(d *gorm.DB, ctx *AppContext) DbWrapper {
+	return DbWrapper{
 		db:          d,
 		topDb:       d,
 		app:         ctx,
@@ -52,7 +52,7 @@ func WrapGormDb[T any](d *gorm.DB, ctx *AppContext[T]) DbWrapper[T] {
 	}
 }
 
-func (d DbWrapper[CtxType]) Raw() *gorm.DB {
+func (d DbWrapper) Raw() *gorm.DB {
 
 	var dbRef *gorm.DB
 
@@ -65,22 +65,22 @@ func (d DbWrapper[CtxType]) Raw() *gorm.DB {
 	return dbRef
 }
 
-func (d *DbWrapper[CtxType]) Debug(v bool) {
+func (d *DbWrapper) Debug(v bool) {
 	d.debug = v
 }
-func (d DbWrapper[CtxType]) CleanCopy() DbWrapper[CtxType] {
-	return WrapGormDb[CtxType](d.topDb, d.app)
+func (d DbWrapper) CleanCopy() DbWrapper {
+	return WrapGormDb(d.topDb, d.app)
 }
 
-func (d *DbWrapper[CtxType]) setRaw(_db *gorm.DB) {
+func (d *DbWrapper) setRaw(_db *gorm.DB) {
 	d.db = _db
 }
 
-func _isolatedCreate[CtxType any](obj any, ctx AppContext[CtxType]) (err error) {
+func _isolatedCreate(obj any, ctx AppContext) (err error) {
 
 	_db := ctx.Db.Raw()
 
-	__obj, ok := obj.(OnBeforeUpdateCbAware[CtxType])
+	__obj, ok := obj.(OnBeforeUpdateCbAware)
 	if ok {
 		beforeUpdateCbErr := __obj.BeforeUpdate(&ctx)
 		if beforeUpdateCbErr != nil {
@@ -95,7 +95,7 @@ func _isolatedCreate[CtxType any](obj any, ctx AppContext[CtxType]) (err error) 
 	}
 
 	// check after event
-	_obj, ok := obj.(AfterCreateCbAware[CtxType])
+	_obj, ok := obj.(AfterCreateCbAware)
 	if ok {
 		return _obj.AfterEntityCreate(&ctx)
 	}
@@ -103,11 +103,11 @@ func _isolatedCreate[CtxType any](obj any, ctx AppContext[CtxType]) (err error) 
 	return nil
 }
 
-func _isolatedSaveOnlyFields[CtxType any](obj any, ctx AppContext[CtxType], fields []string) (err error) {
+func _isolatedSaveOnlyFields(obj any, ctx AppContext, fields []string) (err error) {
 
 	_db := ctx.Db.Raw()
 
-	__obj, ok := obj.(OnBeforeUpdateCbAware[CtxType])
+	__obj, ok := obj.(OnBeforeUpdateCbAware)
 	if ok {
 		beforeUpdateCbErr := __obj.BeforeUpdate(&ctx)
 		if beforeUpdateCbErr != nil {
@@ -128,7 +128,7 @@ func _isolatedSaveOnlyFields[CtxType any](obj any, ctx AppContext[CtxType], fiel
 
 	// check after event
 	// should be executed after transaction commit
-	_obj, ok := obj.(OnAfterUpdateCbAware[CtxType])
+	_obj, ok := obj.(OnAfterUpdateCbAware)
 	if ok {
 		return _obj.AfterUpdate(&ctx)
 	}
@@ -136,11 +136,11 @@ func _isolatedSaveOnlyFields[CtxType any](obj any, ctx AppContext[CtxType], fiel
 	return nil
 }
 
-func _isolatedSave[CtxType any](obj any, ctx AppContext[CtxType]) (err error) {
+func _isolatedSave(obj any, ctx AppContext) (err error) {
 
 	_db := ctx.Db.Raw()
 
-	__obj, ok := obj.(OnBeforeUpdateCbAware[CtxType])
+	__obj, ok := obj.(OnBeforeUpdateCbAware)
 	if ok {
 		beforeUpdateCbErr := __obj.BeforeUpdate(&ctx)
 		if beforeUpdateCbErr != nil {
@@ -156,7 +156,7 @@ func _isolatedSave[CtxType any](obj any, ctx AppContext[CtxType]) (err error) {
 
 	// check after event
 	// should be executed after transaction commit
-	_obj, ok := obj.(OnAfterUpdateCbAware[CtxType])
+	_obj, ok := obj.(OnAfterUpdateCbAware)
 	if ok {
 		return _obj.AfterUpdate(&ctx)
 	}
@@ -164,7 +164,7 @@ func _isolatedSave[CtxType any](obj any, ctx AppContext[CtxType]) (err error) {
 	return nil
 }
 
-func (d DbWrapper[CtxType]) UpdateFields(obj any, fields ...string) (err error) {
+func (d DbWrapper) UpdateFields(obj any, fields ...string) (err error) {
 
 	if d.app.isolated {
 		return _isolatedSaveOnlyFields(obj, *d.app, fields)
@@ -175,7 +175,7 @@ func (d DbWrapper[CtxType]) UpdateFields(obj any, fields ...string) (err error) 
 	})
 }
 
-func (d DbWrapper[CtxType]) Save(obj any) (err error) {
+func (d DbWrapper) Save(obj any) (err error) {
 
 	if d.app.isolated {
 		return _isolatedSave(obj, *d.app)
@@ -186,7 +186,7 @@ func (d DbWrapper[CtxType]) Save(obj any) (err error) {
 	})
 }
 
-func (d DbWrapper[CtxType]) Create(obj any) (err error) {
+func (d DbWrapper) Create(obj any) (err error) {
 
 	if d.app.isolated {
 		return _isolatedCreate(obj, *d.app)
@@ -197,7 +197,7 @@ func (d DbWrapper[CtxType]) Create(obj any) (err error) {
 	})
 }
 
-func (d DbWrapper[CtxType]) Delete(obj any) (err error) {
+func (d DbWrapper) Delete(obj any) (err error) {
 
 	err = d.Raw().Delete(obj).Error
 
@@ -212,7 +212,7 @@ func (d DbWrapper[CtxType]) Delete(obj any) (err error) {
 	// })
 }
 
-func SortAndFindAllWhere[T any, CtxType any](db DbWrapper[CtxType], sortByField string, sortBy int, limit, offset int, where string, whereArgs ...any) typed.Result[[]T] {
+func SortAndFindAllWhere[T any](db DbWrapper, sortByField string, sortBy int, limit, offset int, where string, whereArgs ...any) typed.Result[[]T] {
 
 	result := []T{}
 
@@ -248,7 +248,7 @@ func SortAndFindAllWhere[T any, CtxType any](db DbWrapper[CtxType], sortByField 
 
 }
 
-func FindAllWhere[T any, CtxType any](db DbWrapper[CtxType], where string, whereArgs ...any) typed.Result[[]T] {
+func FindAllWhere[T any](db DbWrapper, where string, whereArgs ...any) typed.Result[[]T] {
 
 	result := []T{}
 
@@ -262,7 +262,7 @@ func FindAllWhere[T any, CtxType any](db DbWrapper[CtxType], where string, where
 
 }
 
-func FindAndLockFirstWhere[T any, CtxType any](db DbWrapper[CtxType], where string, whereArgs ...any) typed.Result[T] {
+func FindAndLockFirstWhere[T any](db DbWrapper, where string, whereArgs ...any) typed.Result[T] {
 
 	var result T
 
@@ -278,7 +278,7 @@ func FindAndLockFirstWhere[T any, CtxType any](db DbWrapper[CtxType], where stri
 
 }
 
-func FindFirstWhere[T any, CtxType any](db DbWrapper[CtxType], where string, whereArgs ...any) typed.Result[T] {
+func FindFirstWhere[T any](db DbWrapper, where string, whereArgs ...any) typed.Result[T] {
 
 	var result T
 

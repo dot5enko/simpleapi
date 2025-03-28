@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/dot5enko/typed"
+	typed "github.com/cldfn/utils"
 	"github.com/gin-gonic/gin"
 )
 

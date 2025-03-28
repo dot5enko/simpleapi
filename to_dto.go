@@ -1,9 +1,11 @@
 package simpleapi
 
-import "github.com/dot5enko/typed"
+import (
+	typed "github.com/cldfn/utils"
+)
 
 // todo add softdeleted item handler
-func ToDto[T any, CtxType any](it T, appctx *AppContext[CtxType], req RequestData) typed.Result[map[string]any] {
+func ToDto[T any](it T, appctx *AppContext, req RequestData) typed.Result[map[string]any] {
 
 	// optimize
 	m := appctx.ApiData(it)
@@ -12,7 +14,7 @@ func ToDto[T any, CtxType any](it T, appctx *AppContext[CtxType], req RequestDat
 
 	if m.OutExtraMethod {
 
-		dtoPresenter, _ := any(it).(ApiDto[CtxType])
+		dtoPresenter, _ := any(it).(ApiDto)
 
 		var result typed.Result[map[string]any]
 
@@ -20,12 +22,9 @@ func ToDto[T any, CtxType any](it T, appctx *AppContext[CtxType], req RequestDat
 
 		func() {
 
-			defer func() {
-				rec := recover()
-				if rec != nil {
-					internalError = typed.PanickedError{Cause: rec}
-				}
-			}()
+			defer typed.RecoverPanic(func(pe *typed.PanicError) {
+				internalError = pe
+			})
 
 			result = dtoPresenter.ToApiDto(rawDto, req, appctx)
 		}()

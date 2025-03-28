@@ -7,7 +7,7 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/dot5enko/typed"
+	typed "github.com/cldfn/utils"
 	"github.com/tidwall/gjson"
 )
 

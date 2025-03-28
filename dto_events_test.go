@@ -13,7 +13,7 @@ func TestBeforeUpdateEvent(t *testing.T) {
 
 	cbAware_, ok := anyEvent.(OnBeforeUpdateCbAware[MockAppContext])
 
-	fakeContext := NewAppContext[MockAppContext](&MockAppContext{})
+	fakeContext := NewAppContext()
 
 	if !ok {
 		t.Log("type is not a beforeUpdate interface")

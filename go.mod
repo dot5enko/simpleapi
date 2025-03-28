@@ -3,6 +3,7 @@ module github.com/dot5enko/simpleapi
 go 1.18
 
 require (
+	github.com/cldfn/utils v0.0.3
 	github.com/dot5enko/typed v1.0.74
 	github.com/gin-gonic/gin v1.9.1
 	github.com/google/uuid v1.3.0
