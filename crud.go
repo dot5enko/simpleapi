@@ -55,6 +55,7 @@ type CrudConfig[T any, CtxType any] struct {
 
 	objectCreate func(ctx CrudContext[T, CtxType], obj *T) error
 	afterCreate  func(ctx *AppContext[CtxType], obj *T) error
+	objectRemove func(ctx CrudContext[T, CtxType], obj *T) error
 
 	relTypeTable string
 
@@ -201,6 +202,11 @@ func (it *CrudConfig[T, CtxType]) Disable(config EndpointsDisableConfig) *CrudCo
 
 func (it *CrudConfig[T, CtxType]) OnObjectCreate(h func(crudContext CrudContext[T, CtxType], obj *T) error) *CrudConfig[T, CtxType] {
 	it.objectCreate = h
+	return it
+}
+
+func (it *CrudConfig[T, CtxType]) OnObjectRemoved(h func(crudContext CrudContext[T, CtxType], obj *T) error) *CrudConfig[T, CtxType] {
+	it.objectRemove = h
 	return it
 }
 
@@ -378,6 +384,17 @@ func (result *CrudConfig[T, CtxType]) DeleteEntity(appctx *AppContext[CtxType], 
 
 			return
 		} else {
+
+			crudCtx := CrudContext[T, CtxType]{
+				App:  appctx,
+				Crud: result,
+			}
+
+			errRemove := result.objectRemove(crudCtx, &modelCopy)
+			if errRemove != nil {
+				reqData.log_format("unable to notify object removal: %s", errRemove.Error())
+			}
+
 			respData.Httpcode = 200
 			responseData["ok"] = true
 		}
