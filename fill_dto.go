@@ -42,7 +42,7 @@ func stackToLog(prefix string, loggr *log.Logger) {
 }
 
 var supportedSliceTypes = []reflect.Kind{
-	reflect.Uint64, reflect.Int64, reflect.Int, reflect.Uint, reflect.Int32, reflect.Uint32, reflect.Int16, reflect.Uint16, reflect.Uint8, reflect.Int8, reflect.String,
+	reflect.Uint64, reflect.Int64, reflect.Int, reflect.Uint, reflect.Int32, reflect.Uint32, reflect.Int16, reflect.Uint16, reflect.Uint8, reflect.Int8,
 }
 
 func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req RequestData) (result any, err error) {
