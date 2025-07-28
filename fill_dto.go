@@ -42,7 +42,7 @@ func stackToLog(prefix string, loggr *log.Logger) {
 }
 
 var supportedSliceTypes = []reflect.Kind{
-	reflect.Uint64, reflect.Int64, reflect.Int, reflect.Uint, reflect.Int32, reflect.Uint32, reflect.Int16, reflect.Uint16, reflect.Uint8, reflect.Int8,
+	reflect.Uint64, reflect.Int64, reflect.Int, reflect.Uint, reflect.Int32, reflect.Uint32, reflect.Int16, reflect.Uint16, reflect.Uint8, reflect.Int8, reflect.String,
 }
 
 func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req RequestData) (result any, err error) {
@@ -92,9 +92,23 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req Reques
 		}
 
 		if !isSupportedType {
-			req.log_format("[%s] field has unsupported array type : %s", *fieldInfo.Name, elementType)
-			err = ErrUnsupportedSliceFilterArgType
-			return
+
+			if elementType.Kind() == reflect.String {
+				result := []string{}
+
+				req.log_format("slice is of type string")
+
+				for _, it := range jsonFieldValue.Array() {
+					result = append(result, it.String())
+				}
+
+				dtoData = result
+			} else {
+
+				req.log_format("[%s] field has unsupported array type : %s", *fieldInfo.Name, elementType)
+				err = ErrUnsupportedSliceFilterArgType
+				return
+			}
 		} else {
 
 			result := []uint64{}
