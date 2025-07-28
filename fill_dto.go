@@ -93,7 +93,7 @@ func ProcessFieldType(fieldInfo ApiTags, jsonFieldValue gjson.Result, req Reques
 
 		if !isSupportedType {
 
-			if elementType.Kind() == reflect.String {
+			if ekind == reflect.String {
 				result := []string{}
 
 				req.log_format("slice is of type string")
